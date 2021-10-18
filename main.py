@@ -4,10 +4,8 @@ import socket
 import time
 import queue
 
-
-from devinfo_window import DevInfoWindow
-from mcu_telemetry_window import McuTelemetryWindow
-from join_key_window import JoinKeyWindow
+from msg_window_cls import MsgWindow, TabIndex
+# import msg_window_cls
 from PyQt5 import QtWidgets
 from PyQt5.QtCore import QThread
 
@@ -54,9 +52,8 @@ class ServWindow(QtWidgets.QMainWindow, serv.Ui_MainWindow, QtWidgets.QMessageBo
         self.setupUi(self)  # Это нужно для инициализации нашего дизайна
 
         # Other window begin
-        self.devinfo_win = 0
-        self.mcu_telemetry_win = 0
-        self.join_key_win = 0
+        self.windowIsOpen = False
+        self.messagesWindow = MsgWindow()  # if window not opened, created new MsgWindow object
         # Other window end
 
         # Error dialog begin
@@ -69,14 +66,13 @@ class ServWindow(QtWidgets.QMainWindow, serv.Ui_MainWindow, QtWidgets.QMessageBo
         self.createMessage.clicked.connect(self.create_message)  # methods for sending created message to client
         choice_message_arr = ["Choice message", "devinfo_req", "mcu_telemetry_req", "ds18b20_req", "adx1345_req",
                               "vibro_rms_req", "reboot", "cw_req", "join_key_req"]
-        self.fill_combo_box(choice_message_arr, "choice message")  # fill combo box field
+        self.fill_combo_box(choice_message_arr)  # fill combo box field
         self.serialPort.setPlaceholderText("Serial port")
         self.socketPort.setPlaceholderText("Socket port")
-        # enum_arr = ["CW command enumeration", "CW_ON", "CW_OFF", "CW_FORM_START", "CW_FORM_FINISH"]
-        # self.fill_combo_box(enum_arr, "enum")
         # For GUI end
 
         # For socket and serial begin
+        self.socketIsConnect = False
         self.sock_port = 0 # socket port
         self.ser_port = 0  # serial port
         self.sock = 0
@@ -92,15 +88,10 @@ class ServWindow(QtWidgets.QMainWindow, serv.Ui_MainWindow, QtWidgets.QMessageBo
 # This function filling combo box items
 # arr - array of with elements combo box items
 # combo_box - select combo box which will be filling
-    def fill_combo_box(self, arr, combo_box):
-        if combo_box == "choice message":
-            for i in arr:
-                self.choiceMessage.addItem(str(i))
-                print(i)
-        # elif combo_box == "enum":
-        #     for i in arr:
-        #         self.enumField.addItem(str(i))
-        #         print(i)
+    def fill_combo_box(self, arr):
+        for i in arr:
+            self.choiceMessage.addItem(str(i))
+            print(i)
 
 # This function returns condition of GUI fields
 # return value is list of elements GUI fields
@@ -130,26 +121,43 @@ class ServWindow(QtWidgets.QMainWindow, serv.Ui_MainWindow, QtWidgets.QMessageBo
             self.listWidget.addItem("Please select message")
             return 1
         elif msg == "devinfo_req":
-            self.devinfo_win = DevInfoWindow()  # new DevInfoWindow object
-            self.devinfo_win.show()
+            self.check_window()
+            self.messagesWindow.enable_tab(TabIndex.DEV_INFO)
+            self.createMessage.setEnabled(True)
             return 0
         elif msg == "mcu_telemetry_req":
-            self.mcu_telemetry_win = McuTelemetryWindow()  # new McuTelemetryWindow object
-            self.mcu_telemetry_win.show()
+            self.check_window()
+            self.messagesWindow.enable_tab(TabIndex.MCU_TELEMETRY)
+            self.createMessage.setEnabled(True)
             return 0
         elif msg == "ds18b20_req":
+            self.check_window()
+            self.messagesWindow.enable_tab(TabIndex.DS18B20)
+            self.createMessage.setEnabled(True)
             return 0
         elif msg == "adx1345_req":
+            self.check_window()
+            self.messagesWindow.enable_tab(TabIndex.ADXL345)
+            self.createMessage.setEnabled(True)
             return 0
         elif msg == "vibro_rms_req":
+            self.check_window()
+            self.createMessage.setEnabled(True)
             return 0
         elif msg == "reboot":
+            self.check_window()
+            self.messagesWindow.enable_tab(TabIndex.REBOOT)
+            self.createMessage.setEnabled(True)
             return 0
         elif msg == "cw_req":
+            self.check_window()
+            self.messagesWindow.enable_tab(TabIndex.CW_MODE)
+            self.createMessage.setEnabled(True)
             return 0
         elif msg == "join_key_req":
-            self.join_key_win = JoinKeyWindow()  # new JoinKeyWindow object
-            self.join_key_win.show()
+            self.check_window()
+            self.messagesWindow.enable_tab(TabIndex.JOIN_KEY)
+            self.createMessage.setEnabled(True)
             return 0
 
 # This function is callback on button pushing
@@ -157,30 +165,26 @@ class ServWindow(QtWidgets.QMainWindow, serv.Ui_MainWindow, QtWidgets.QMessageBo
 # here connect socket
     def create_message(self):
         self.createMessage.setEnabled(False)  # disable button while message sending
-        # self.block_fields()  # disable all fields while message sending
-        arr = self.get_sock_ser_ports()
-        if arr == 1:
-            self.listWidget.addItem("Please fill in all fields")
-            return 1
-        self.sock_port = arr[0]
-        self.ser_port = arr[1]
-        self.sock_connect()
+
+        if not self.socketIsConnect:  # check socket connection
+            self.socketIsConnect = True
+            arr = self.get_sock_ser_ports()
+            if arr == 1:
+                self.listWidget.addItem("Please fill in all fields")
+                return 1
+            self.sock_port = arr[0]
+            self.ser_port = arr[1]
+            self.sock_connect()
+            self.serialPort.setEnabled(False)  # block fields with input serial port
+            self.socketPort.setEnabled(False)  # block fields with input socket port
+
         self.sock_thread.run = True
         self.scan_thread.run = True
         self.scan_thread.start()  # start scan thread
         self.sock_thread.start()  # start sock thread
+
         if self.select_msg_param() == 1:
             return 1
-
-# This function blocked GUI fields that user couldn't change them before message request
-#     def block_fields(self):
-        # # disable all fields while message sending
-        # self.stringField.setEnabled(False)
-        # self.integerField.setEnabled(False)
-        # self.doubleField.setEnabled(False)
-        # self.BoolField.setEnabled(False)
-        # self.choiceMessage.setEnabled(False)
-        # self.enumField.setEnabled(False)
 
 # This function connected to socket port
     def sock_connect(self):
@@ -195,11 +199,10 @@ class ServWindow(QtWidgets.QMainWindow, serv.Ui_MainWindow, QtWidgets.QMessageBo
         self.conn, addr = self.sock.accept()
         self.listWidget.addItem("socket connected: " + str(port) + str(',') + str(addr))
 
-    # def stop_recv(self):
-    #     self.scan_thread.run = False
-    #     self.sock_thread.sock_connect = False
-    #     rx_win.listWidget.addItem("receiving stopped")
-
+    def check_window(self):
+        if not self.windowIsOpen:
+            self.windowIsOpen = True
+            self.messagesWindow.show()
 
 
 def main():
@@ -208,6 +211,7 @@ def main():
     serv_win.show()  # Показываем окно
     serv_app.exec_()  # и запускаем приложение
     serv_win.sock.close()   # closing socket connection
+
 
 if __name__ == '__main__':  # Если мы запускаем файл напрямую, а не импортируем
     main()  # то запускаем функцию main()

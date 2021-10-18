@@ -16,7 +16,7 @@ class JoinKeyWindow(QtWidgets.QMainWindow, join_key.Ui_JoinKey, QtWidgets.QMessa
         # Callback end
 
         # Values begin
-        self.values = 0;
+        self.values = 0
         # Values end
 
 
