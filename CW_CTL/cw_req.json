@@ -1,0 +1,12 @@
+{"req":{"lora_param":{"bw":"BW250","cr":"CR4_7","freq":868000000,"pwr":-3,"sf":12}}}
+{"req":{"lora_param":{"bw":"BW250","cr":"CR4_7","freq":868000000,"pwr":-3,"sf":12,"set_param":true}}}
+{"req":{"lora_per":{"n4per":5}}}
+
+{"req":{"devinfo":{}},"transit":true}
+{"req":{"vibro":{}},"transit":true}
+{"req":{"devinfo":{}}}
+
+obsolete
+{"cw":{"cmd":"CW_ON","cw_param":{"freq":864500000,"pwr_dbm":3,"duration":10}}}
+{"cw":{"cmd":"CW_OFF"}}
+{"devinfo":{},"transit":true}

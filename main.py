@@ -3,6 +3,7 @@ import sys
 import socket
 import time
 import queue
+import serial
 
 from msg_window_cls import MsgWindow, TabIndex
 from PyQt5 import QtWidgets
@@ -51,7 +52,6 @@ class ServWindow(QtWidgets.QMainWindow, serv.Ui_MainWindow, QtWidgets.QMessageBo
         self.setupUi(self)  # Это нужно для инициализации нашего дизайна
 
         # Other window begin
-        self.windowIsOpen = False
         self.messagesWindow = MsgWindow()  # if window not opened, created new MsgWindow object
         # Other window end
 
@@ -66,16 +66,15 @@ class ServWindow(QtWidgets.QMainWindow, serv.Ui_MainWindow, QtWidgets.QMessageBo
         choice_message_arr = ["Choice message", "devinfo_req", "mcu_telemetry_req", "ds18b20_req", "adx1345_req",
                               "vibro_rms_req", "reboot", "cw_req", "join_key_req"]
         self.fill_combo_box(choice_message_arr)  # fill combo box field
-        self.serialPort.setPlaceholderText("Serial port")
-        self.socketPort.setPlaceholderText("Socket port")
         # For GUI end
 
         # For socket and serial begin
         self.socketIsConnect = False
+        self.ser = serial.Serial()
         self.sock_port = 0  # socket port
         self.ser_port = 0  # serial port
         self.ser_port_baudrate = 0  # baudrate serial port
-        self.sock = 0
+        self.sock = socket.socket()
         self.conn = 0
         # For socket end
 
@@ -97,68 +96,44 @@ class ServWindow(QtWidgets.QMainWindow, serv.Ui_MainWindow, QtWidgets.QMessageBo
 # return value is list of elements GUI fields
 # value has GUI fields order
     def read_param(self):
-        port = self.socketPort.text()  # get socket port number
-        ser = self.serialPort.text()  # get serial port number
-        baud = self.baudrateSerialPort.text()  # get serial port baudrate
-        if (not port) or (not ser):
+        self.sock_port = self.socketPort.text()  # get socket port number
+        self.ser_port = self.serialPort.text()  # get serial port number
+        self.ser_port_baudrate = self.baudrateSerialPort.text()  # get serial port baudrate
+        if (not self.sock_port) or (not self.ser_port) or (not self.ser_port_baudrate):
             self.error_dialog.setText("Please fill in all fields")
             self.error_dialog.exec_()
             self.createMessage.setEnabled(True)
             return 1
-        arr = [port, ser, baud]
-        # msg = self.choiceMessage.currentText()
-        # enm = self.enumField.currentText()
-        # checkbox = self.BoolField.isChecked()  # get value from check box
-        # integer = self.integerField.value()  # get value from integer spin box
-        # dbl = self.doubleField.value()  # get value from double spin box
-        # str = self.stringField.text()  # get value from string
-        # arr = [msg, enm, checkbox, integer, dbl, str]
-        return arr
+        return 0
 
     def select_msg_param(self):
         msg = self.choiceMessage.currentText()  # selected message
         if msg == "Choice message":
             self.error_dialog.setText("Please select message")
             self.listWidget.addItem("Please select message")
+            self.error_dialog.show()
+            self.createMessage.setEnabled(True)
             return 1
         elif msg == "devinfo_req":
-            self.check_window()
-            self.messagesWindow.enable_tab(TabIndex.DEV_INFO)
-            self.createMessage.setEnabled(True)
+            self.open_tab(TabIndex.DEV_INFO)
             return 0
         elif msg == "mcu_telemetry_req":
-            self.check_window()
-            self.messagesWindow.enable_tab(TabIndex.MCU_TELEMETRY)
-            self.createMessage.setEnabled(True)
+            self.open_tab(TabIndex.MCU_TELEMETRY)
             return 0
         elif msg == "ds18b20_req":
-            self.check_window()
-            self.messagesWindow.enable_tab(TabIndex.DS18B20)
-            self.createMessage.setEnabled(True)
+            self.open_tab(TabIndex.DS18B20)
             return 0
         elif msg == "adx1345_req":
-            self.check_window()
-            self.messagesWindow.enable_tab(TabIndex.ADXL345)
-            self.createMessage.setEnabled(True)
-            return 0
-        elif msg == "vibro_rms_req":
-            self.check_window()
-            self.createMessage.setEnabled(True)
+            self.open_tab(TabIndex.ADXL345)
             return 0
         elif msg == "reboot":
-            self.check_window()
-            self.messagesWindow.enable_tab(TabIndex.REBOOT)
-            self.createMessage.setEnabled(True)
+            self.open_tab(TabIndex.REBOOT)
             return 0
         elif msg == "cw_req":
-            self.check_window()
-            self.messagesWindow.enable_tab(TabIndex.CW_MODE)
-            self.createMessage.setEnabled(True)
+            self.open_tab(TabIndex.CW_MODE)
             return 0
         elif msg == "join_key_req":
-            self.check_window()
-            self.messagesWindow.enable_tab(TabIndex.JOIN_KEY)
-            self.createMessage.setEnabled(True)
+            self.open_tab(TabIndex.JOIN_KEY)
             return 0
 
 # This function is callback on button pushing
@@ -168,18 +143,19 @@ class ServWindow(QtWidgets.QMainWindow, serv.Ui_MainWindow, QtWidgets.QMessageBo
         self.createMessage.setEnabled(False)  # disable button while message sending
 
         if not self.socketIsConnect:  # check socket connection
-            self.socketIsConnect = True
-            arr = self.read_param()
-            if arr == 1:
+            if self.read_param():
                 self.listWidget.addItem("Please fill in all fields")
+                self.createMessage.setEnabled(True)
                 return 1
-            self.sock_port = arr[0]
-            self.ser_port = arr[1]
-            self.ser_port_baudrate = arr[2]
-            self.sock_connect()
+            if self.serial_connect():
+                return 1
+            if self.sock_connect():
+                return 1
+            self.messagesWindow.ser_port = self.ser
             self.serialPort.setEnabled(False)  # block fields with input serial port
             self.socketPort.setEnabled(False)  # block fields with input socket port
             self.baudrateSerialPort.setEnabled(False)  # block fields with input baudrate serial port
+            self.socketIsConnect = True
 
         self.sock_thread.run = True
         self.scan_thread.run = True
@@ -192,20 +168,44 @@ class ServWindow(QtWidgets.QMainWindow, serv.Ui_MainWindow, QtWidgets.QMessageBo
 # This function connected to socket port
     def sock_connect(self):
         port = int(self.sock_port)
-        self.sock = socket.socket()
+        # self.sock = socket.socket()
         try:
             self.sock.bind(('', port))
         except socket.error:
-            self.listWidget.addItem("Address " + str(port) + " already used")
-            sys.exit(1)
+            self.error_dialog.setText("Address " + str(port) + " already use")
+            self.listWidget.addItem("Please, change the socket port")
+            return 1
         self.sock.listen(5)
         self.conn, addr = self.sock.accept()
-        self.listWidget.addItem("socket connected: " + str(port) + str(',') + str(addr))
+        self.listWidget.addItem("socket connected: " + str(port) + str(', ') + str(addr))
+        return 0
 
-    def check_window(self):
-        if not self.windowIsOpen:
-            self.windowIsOpen = True
+    def serial_connect(self):
+        try:
+            # init serial port: port_number=args.port, baudrate = args.baud, timeout = 1 sec
+            self.ser = serial.serial_for_url(self.ser_port, int(self.ser_port_baudrate), timeout=1)
+        except serial.SerialException:
+            self.error_dialog.setText("Serial port " + str(self.ser_port) + " not found!")
+            self.error_dialog.show()
+            self.createMessage.setEnabled(True)
+            return 1
+            # print('\033[91mError: Port %s not found!' % self.ser_port, file=sys.stderr)
+            # sys.exit(1)
+        except ValueError:
+            self.error_dialog.setText("Incorrect serial port parameters!")
+            self.error_dialog.show()
+            self.createMessage.setEnabled(True)
+            return 1
+            # print('\033[91mError: Incorrect serial port parameters!', file=sys.stderr)
+            # sys.exit(1)
+        return 0
+
+    def open_tab(self, index):
+        if not self.messagesWindow.isOpen:
+            self.messagesWindow.isOpen = True
             self.messagesWindow.show()
+        self.messagesWindow.enable_tab(index)
+        self.createMessage.setEnabled(True)
 
 
 def main():
@@ -213,7 +213,8 @@ def main():
     serv_win = ServWindow()  # Создаём объект класса serv_app
     serv_win.show()  # Показываем окно
     serv_app.exec_()  # и запускаем приложение
-    serv_win.sock.close()   # closing socket connection
+    serv_win.sock.close()  # closing socket connection
+    serv_win.ser.close()  # closing serial port connection
 
 
 if __name__ == '__main__':  # Если мы запускаем файл напрямую, а не импортируем

@@ -2,6 +2,7 @@ import msg_window
 
 from PyQt5 import QtWidgets
 from enum import IntEnum
+import cobs_proto_terminal
 from PyQt5.QtCore import QThread
 
 
@@ -20,6 +21,8 @@ class MsgWindow(QtWidgets.QMainWindow, msg_window.Ui_MsgWindow, QtWidgets.QMessa
         # Это здесь нужно для доступа к переменным, методам
         # и т.д. в файле design.py
         super().__init__()
+        self.ser_port = 0
+        self.isOpen = False
         self.setupUi(self)  # Это нужно для инициализации нашего дизайна
 
         # Settings begin
@@ -39,6 +42,8 @@ class MsgWindow(QtWidgets.QMainWindow, msg_window.Ui_MsgWindow, QtWidgets.QMessa
         # Callback end
 
     def get_dev_info(self):
+        print("My message")
+        cobs_proto_terminal.something(self.ser_port)
         # Send devinfo message
         return 0
 
@@ -79,6 +84,11 @@ class MsgWindow(QtWidgets.QMainWindow, msg_window.Ui_MsgWindow, QtWidgets.QMessa
         self.tabMessage.setTabEnabled(int(TabIndex.ADXL345), False)
         self.tabMessage.setTabEnabled(int(TabIndex.REBOOT), False)
         self.tabMessage.setTabEnabled(int(TabIndex.CW_MODE), False)
+
+    def closeEvent(self, event):
+        self.isOpen = False
+        self.disable_all_tabs()
+        event.accept()
 
     def enable_tab(self, index):
         self.tabMessage.setTabEnabled(int(index), True)

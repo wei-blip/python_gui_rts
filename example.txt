@@ -1,0 +1,18 @@
+(venv) [rts@rts-kas test]$ python cobs_proto_terminal.py /dev/ttyACM0
+{"req":{"devinfo":{}}}
+{
+  "resp": {
+    "devinfo": {
+      "devEui": "ElBIUENQmVA=",
+      "family": "RS.0006-0",
+      "version": 1
+    },
+    "respId": 0,
+    "fei": 0,
+    "snr": 0,
+    "rssi": 0,
+    "per": 0
+  },
+  "transit": false
+}
+
