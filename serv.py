@@ -36,6 +36,9 @@ class Ui_MainWindow(object):
         self.socketPort = QtWidgets.QLineEdit(self.centralwidget)
         self.socketPort.setObjectName("socketPort")
         self.verticalLayout_2.addWidget(self.socketPort)
+        self.baudrateSerialPort = QtWidgets.QLineEdit(self.centralwidget)
+        self.baudrateSerialPort.setObjectName("baudrateSerialPort")
+        self.verticalLayout_2.addWidget(self.baudrateSerialPort)
         self.choiceMessage = QtWidgets.QComboBox(self.centralwidget)
         self.choiceMessage.setCurrentText("")
         self.choiceMessage.setObjectName("choiceMessage")
@@ -58,4 +61,7 @@ class Ui_MainWindow(object):
 "p, li { white-space: pre-wrap; }\n"
 "</style></head><body style=\" font-family:\'Noto Sans\'; font-size:10pt; font-weight:400; font-style:normal;\">\n"
 "<p align=\"center\" style=\" margin-top:0px; margin-bottom:0px; margin-left:0px; margin-right:0px; -qt-block-indent:0; text-indent:0px;\"><span style=\" font-size:14pt;\">Create your message</span></p></body></html>"))
+        self.serialPort.setPlaceholderText(_translate("MainWindow", "Serial port"))
+        self.socketPort.setPlaceholderText(_translate("MainWindow", "Socket port"))
+        self.baudrateSerialPort.setPlaceholderText(_translate("MainWindow", "Baudrate"))
         self.createMessage.setText(_translate("MainWindow", "Create message"))

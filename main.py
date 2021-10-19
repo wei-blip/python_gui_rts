@@ -5,7 +5,6 @@ import time
 import queue
 
 from msg_window_cls import MsgWindow, TabIndex
-# import msg_window_cls
 from PyQt5 import QtWidgets
 from PyQt5.QtCore import QThread
 
@@ -73,8 +72,9 @@ class ServWindow(QtWidgets.QMainWindow, serv.Ui_MainWindow, QtWidgets.QMessageBo
 
         # For socket and serial begin
         self.socketIsConnect = False
-        self.sock_port = 0 # socket port
+        self.sock_port = 0  # socket port
         self.ser_port = 0  # serial port
+        self.ser_port_baudrate = 0  # baudrate serial port
         self.sock = 0
         self.conn = 0
         # For socket end
@@ -96,15 +96,16 @@ class ServWindow(QtWidgets.QMainWindow, serv.Ui_MainWindow, QtWidgets.QMessageBo
 # This function returns condition of GUI fields
 # return value is list of elements GUI fields
 # value has GUI fields order
-    def get_sock_ser_ports(self):
-        port = self.socketPort.text()  # get socket port
-        ser = self.serialPort.text()  # get serial port
+    def read_param(self):
+        port = self.socketPort.text()  # get socket port number
+        ser = self.serialPort.text()  # get serial port number
+        baud = self.baudrateSerialPort.text()  # get serial port baudrate
         if (not port) or (not ser):
             self.error_dialog.setText("Please fill in all fields")
             self.error_dialog.exec_()
             self.createMessage.setEnabled(True)
             return 1
-        arr = [port, ser]
+        arr = [port, ser, baud]
         # msg = self.choiceMessage.currentText()
         # enm = self.enumField.currentText()
         # checkbox = self.BoolField.isChecked()  # get value from check box
@@ -168,15 +169,17 @@ class ServWindow(QtWidgets.QMainWindow, serv.Ui_MainWindow, QtWidgets.QMessageBo
 
         if not self.socketIsConnect:  # check socket connection
             self.socketIsConnect = True
-            arr = self.get_sock_ser_ports()
+            arr = self.read_param()
             if arr == 1:
                 self.listWidget.addItem("Please fill in all fields")
                 return 1
             self.sock_port = arr[0]
             self.ser_port = arr[1]
+            self.ser_port_baudrate = arr[2]
             self.sock_connect()
             self.serialPort.setEnabled(False)  # block fields with input serial port
             self.socketPort.setEnabled(False)  # block fields with input socket port
+            self.baudrateSerialPort.setEnabled(False)  # block fields with input baudrate serial port
 
         self.sock_thread.run = True
         self.scan_thread.run = True
