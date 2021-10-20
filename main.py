@@ -19,9 +19,26 @@ class SockThread(QThread):
         self.run = False
 
     def run(self):
-         while self.run:
-            self.serv_win.listWidget.addItem("socket thread")
-            time.sleep(0.5)
+        while self.run:
+            # self.serv_win.listWidget.addItem("socket thread")
+            # time.sleep(0.5)
+            pass
+
+
+# Thread to display time begin
+class TimeThread(QThread):
+    def __init__(self, serv_win, queue, parent=None):
+        QThread.__init__(self, parent)
+        self.serv_win = serv_win
+        self.queue = queue
+
+    def run(self):
+        while True:
+            if not self.queue.empty():
+                self.serv_win.listWidget.addItem(self.queue.get_nowait())
+                self.queue.task_done()
+            time.sleep(1)
+# Thread to display time end
 
 
 # Thread for scanning GUI
@@ -33,15 +50,10 @@ class ScanThread(QThread):
         self.run = False
 
     def run(self):
-         while self.run:
-            self.serv_win.listWidget.addItem("scan thread")
-            # if not self.queue.empty():
-            #     data = self.queue.get_nowait()
-            #     rx_win.listWidget.addItem(("Data recv: " + str(data)))  # if we have a data, we print data on window.
-            # # if not self.queue.empty():
-            # #     data = self.queue.get_nowait()
-            # #     rx_win.listWidget.addItem(("Data recv: " + data))  # if we have a data, we print data on window.
-            time.sleep(1)
+        while self.run:
+            # self.serv_win.listWidget.addItem("scan thread")
+            # time.sleep(1)
+            pass
 
 
 class ServWindow(QtWidgets.QMainWindow, serv.Ui_MainWindow, QtWidgets.QMessageBox):
@@ -51,10 +63,6 @@ class ServWindow(QtWidgets.QMainWindow, serv.Ui_MainWindow, QtWidgets.QMessageBo
         super().__init__()
         self.setupUi(self)  # Это нужно для инициализации нашего дизайна
 
-        # Other window begin
-        self.messagesWindow = MsgWindow()  # if window not opened, created new MsgWindow object
-        # Other window end
-
         # Error dialog begin
         self.error_dialog = QtWidgets.QMessageBox()  # create error dialog object
         self.error_dialog.setIcon(QtWidgets.QMessageBox.Critical)
@@ -63,18 +71,20 @@ class ServWindow(QtWidgets.QMainWindow, serv.Ui_MainWindow, QtWidgets.QMessageBo
 
         # For GUI begin
         self.createMessage.clicked.connect(self.create_message)  # methods for sending created message to client
-        choice_message_arr = ["Choice message", "devinfo_req", "mcu_telemetry_req", "ds18b20_req", "adx1345_req",
-                              "vibro_rms_req", "reboot", "cw_req", "join_key_req"]
-        self.fill_combo_box(choice_message_arr)  # fill combo box field
+        self.fill_combo_box(["Choice message", "devinfo_req", "mcu_telemetry_req", "ds18b20_req", "adx1345_req",
+                              "vibro_rms_req", "reboot", "cw_req", "join_key_req"])  # fill combo box field
         # For GUI end
 
-        # For socket and serial begin
-        self.socketIsConnect = False
+        # For serial begin
         self.ser = serial.Serial()
-        self.sock_port = 0  # socket port
         self.ser_port = 0  # serial port
         self.ser_port_baudrate = 0  # baudrate serial port
+        # For serial end
+
+        # For socket begin
+        self.socketIsConnect = False
         self.sock = socket.socket()
+        self.sock_port = 0  # socket port
         self.conn = 0
         # For socket end
 
@@ -83,6 +93,12 @@ class ServWindow(QtWidgets.QMainWindow, serv.Ui_MainWindow, QtWidgets.QMessageBo
         self.scan_thread = ScanThread(self, self.queue)
         self.sock_thread = SockThread(self, self.queue)
         # For threading end
+
+        # Other window begin
+        self.queue_time = queue.Queue()
+        self.messagesWindow = MsgWindow(self.queue_time)
+        self.time_thread = TimeThread(self, self.queue_time)
+        # Other window end
 
 # This function filling combo box items
 # arr - array of with elements combo box items
@@ -151,17 +167,18 @@ class ServWindow(QtWidgets.QMainWindow, serv.Ui_MainWindow, QtWidgets.QMessageBo
                 return 1
             if self.sock_connect():
                 return 1
-            self.messagesWindow.ser_port = self.ser
+            # self.messagesWindow.ser_port = self.ser
+            self.messagesWindow.init_thread(self.ser)
             self.serialPort.setEnabled(False)  # block fields with input serial port
             self.socketPort.setEnabled(False)  # block fields with input socket port
             self.baudrateSerialPort.setEnabled(False)  # block fields with input baudrate serial port
             self.socketIsConnect = True
 
-        self.sock_thread.run = True
-        self.scan_thread.run = True
-        self.scan_thread.start()  # start scan thread
-        self.sock_thread.start()  # start sock thread
-
+        # self.sock_thread.run = True
+        # self.scan_thread.run = True
+        # self.scan_thread.start()  # start scan thread
+        # self.sock_thread.start()  # start sock thread
+        self.time_thread.start()  # start time thread
         if self.select_msg_param() == 1:
             return 1
 
@@ -174,6 +191,7 @@ class ServWindow(QtWidgets.QMainWindow, serv.Ui_MainWindow, QtWidgets.QMessageBo
         except socket.error:
             self.error_dialog.setText("Address " + str(port) + " already use")
             self.listWidget.addItem("Please, change the socket port")
+            self.createMessage.setEnabled(True)
             return 1
         self.sock.listen(5)
         self.conn, addr = self.sock.accept()
@@ -189,15 +207,11 @@ class ServWindow(QtWidgets.QMainWindow, serv.Ui_MainWindow, QtWidgets.QMessageBo
             self.error_dialog.show()
             self.createMessage.setEnabled(True)
             return 1
-            # print('\033[91mError: Port %s not found!' % self.ser_port, file=sys.stderr)
-            # sys.exit(1)
         except ValueError:
             self.error_dialog.setText("Incorrect serial port parameters!")
             self.error_dialog.show()
             self.createMessage.setEnabled(True)
             return 1
-            # print('\033[91mError: Incorrect serial port parameters!', file=sys.stderr)
-            # sys.exit(1)
         return 0
 
     def open_tab(self, index):
@@ -214,6 +228,7 @@ def main():
     serv_win.show()  # Показываем окно
     serv_app.exec_()  # и запускаем приложение
     serv_win.sock.close()  # closing socket connection
+    serv_win.messagesWindow.thread.close()  # closing thread
     serv_win.ser.close()  # closing serial port connection
 
 

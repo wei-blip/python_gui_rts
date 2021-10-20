@@ -61,24 +61,6 @@ class ProtoCOBSCat(serial_cobs_proto.ProtoCOBSJSON):
         sys.stdout.flush()
 
 
-def something(ser):
-    thread = serial.threaded.ReaderThread(ser, ProtoCOBSCat)  # ?
-    thread.start()
-
-    (transport, protocol) = thread.connect()
-
-    protocol.set_msg_class(exch())
-
-    try:
-        while True:
-            data = '{"req":{"devinfo":{}}}'
-            protocol.write_msg_json(data, exch())
-    except KeyboardInterrupt:
-        pass
-
-    thread.close()
-
-
 if __name__ == "__main__":
 
     parser = argparse.ArgumentParser('cobs_terminal', description="serial terminal with COBS")  # create new object parser with description = "serial terminal with COBS"
