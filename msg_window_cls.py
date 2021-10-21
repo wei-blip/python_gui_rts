@@ -100,7 +100,7 @@ class MsgWindow(QtWidgets.QMainWindow, msg_window.Ui_MsgWindow, QtWidgets.QMessa
 
         # Settings begin
         # fill cw_cmd
-        self.fill_combo_box(["CW command enumeration", "CW_ON", "CW_OFF", "CW_FORM_START", "CW_FORM_FINISH"])
+        self.fill_combo_box(["CW command", "CW_ON", "CW_OFF", "CW_FORM_START", "CW_FORM_FINISH"])
         self.disable_all_tabs()
         self.recv_thread.start()
         # Settings end
@@ -148,6 +148,11 @@ class MsgWindow(QtWidgets.QMainWindow, msg_window.Ui_MsgWindow, QtWidgets.QMessa
 
     def set_cw_mode(self):
         # Set device in cw mode message
+        cmd = self.cw_cmd.currentText()  # get cw command
+        freq = str(self.freq.value())  # get frequency value
+        pwr = str(self.pwr_dbm.value())  # get power value
+        dur = str(self.duration.value())  # get duration value
+        msg = '{"req":{""}'
         return 0
 
 # Reboot device begin

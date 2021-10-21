@@ -3,7 +3,7 @@ import sys
 import socket
 import time
 import queue
-import serial
+import serial, serial.tools.list_ports
 
 from msg_window_cls import MsgWindow, TabIndex
 from PyQt5 import QtWidgets
@@ -72,7 +72,10 @@ class ServWindow(QtWidgets.QMainWindow, serv.Ui_MainWindow, QtWidgets.QMessageBo
         # For GUI begin
         self.createMessage.clicked.connect(self.create_message)  # methods for sending created message to client
         self.fill_combo_box(["Choice message", "devinfo_req", "mcu_telemetry_req", "ds18b20_req", "adx1345_req",
-                              "vibro_rms_req", "reboot", "cw_req", "join_key_req"])  # fill combo box field
+                              "vibro_rms_req", "reboot", "cw_req", "join_key_req"], "message")  # fill combo box field
+        self.fill_combo_box(["Choice baudrate", "300", "1200", "2400", "4800", "9600", "19200", "38400",
+                             "57600", "115200"], "baudrate")  # fill combo box baudrate
+        self.fill_combo_box(0, "serial_ports")  # fill combo box serial ports
         # For GUI end
 
         # For serial begin
@@ -103,19 +106,27 @@ class ServWindow(QtWidgets.QMainWindow, serv.Ui_MainWindow, QtWidgets.QMessageBo
 # This function filling combo box items
 # arr - array of with elements combo box items
 # combo_box - select combo box which will be filling
-    def fill_combo_box(self, arr):
-        for i in arr:
-            self.choiceMessage.addItem(str(i))
-            print(i)
+    def fill_combo_box(self, arr, combo_box_type):
+        if combo_box_type == "message":
+            for i in arr:
+                self.choiceMessage.addItem(str(i))
+        elif combo_box_type == "baudrate":
+            for i in arr:
+                self.baudrateSerialPort.addItem(str(i))
+        elif combo_box_type == "serial_ports":
+            self.serialPort.addItem("Choice serial port")
+            for port in list(serial.tools.list_ports.comports()):
+                self.serialPort.addItem(str(port.device))
 
 # This function returns condition of GUI fields
 # return value is list of elements GUI fields
 # value has GUI fields order
     def read_param(self):
         self.sock_port = self.socketPort.text()  # get socket port number
-        self.ser_port = self.serialPort.text()  # get serial port number
-        self.ser_port_baudrate = self.baudrateSerialPort.text()  # get serial port baudrate
-        if (not self.sock_port) or (not self.ser_port) or (not self.ser_port_baudrate):
+        self.ser_port = self.serialPort.currentText()  # get serial port number
+        self.ser_port_baudrate = self.baudrateSerialPort.currentText()  # get serial port baudrate
+        if (not self.sock_port) or (self.ser_port == "Choice serial port") or \
+                (self.ser_port_baudrate == "Choice baudrate"):
             self.error_dialog.setText("Please fill in all fields")
             self.error_dialog.exec_()
             self.createMessage.setEnabled(True)
@@ -200,7 +211,7 @@ class ServWindow(QtWidgets.QMainWindow, serv.Ui_MainWindow, QtWidgets.QMessageBo
 
     def serial_connect(self):
         try:
-            # init serial port: port_number=args.port, baudrate = args.baud, timeout = 1 sec
+            # init serial port: port_number=self.ser_port, baudrate=self.ser_port_baudrate, timeout = 1 sec
             self.ser = serial.serial_for_url(self.ser_port, int(self.ser_port_baudrate), timeout=1)
         except serial.SerialException:
             self.error_dialog.setText("Serial port " + str(self.ser_port) + " not found!")

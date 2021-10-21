@@ -21,7 +21,7 @@
     <item>
      <widget class="QTabWidget" name="tabMessage">
       <property name="currentIndex">
-       <number>6</number>
+       <number>0</number>
       </property>
       <widget class="QWidget" name="devinfo_tab">
        <attribute name="title">
@@ -172,13 +172,29 @@
            <layout class="QVBoxLayout" name="verticalLayout_10">
             <item>
              <layout class="QHBoxLayout" name="horizontalLayout_4">
+              <property name="topMargin">
+               <number>6</number>
+              </property>
               <item>
                <widget class="QComboBox" name="cw_cmd"/>
               </item>
               <item>
                <widget class="QSpinBox" name="freq">
+                <property name="specialValueText">
+                 <string/>
+                </property>
+                <property name="suffix">
+                 <string/>
+                </property>
                 <property name="maximum">
                  <number>999999999</number>
+                </property>
+               </widget>
+              </item>
+              <item>
+               <widget class="QLabel" name="label_3">
+                <property name="text">
+                 <string>Frequency</string>
                 </property>
                </widget>
               </item>
@@ -188,8 +204,11 @@
              <layout class="QHBoxLayout" name="horizontalLayout_5">
               <item>
                <widget class="QSpinBox" name="duration">
+                <property name="specialValueText">
+                 <string/>
+                </property>
                 <property name="minimum">
-                 <number>-999999999</number>
+                 <number>0</number>
                 </property>
                 <property name="maximum">
                  <number>999999999</number>
@@ -197,9 +216,29 @@
                </widget>
               </item>
               <item>
+               <widget class="QLabel" name="label">
+                <property name="text">
+                 <string>Duration</string>
+                </property>
+               </widget>
+              </item>
+              <item>
                <widget class="QSpinBox" name="pwr_dbm">
+                <property name="specialValueText">
+                 <string/>
+                </property>
+                <property name="minimum">
+                 <number>-4</number>
+                </property>
                 <property name="maximum">
-                 <number>999999999</number>
+                 <number>15</number>
+                </property>
+               </widget>
+              </item>
+              <item>
+               <widget class="QLabel" name="label_2">
+                <property name="text">
+                 <string>Power</string>
                 </property>
                </widget>
               </item>
@@ -210,7 +249,7 @@
          </layout>
         </item>
         <item>
-         <widget class="QPushButton" name="pushButton">
+         <widget class="QPushButton" name="setCwMode">
           <property name="text">
            <string>Set in CW mode</string>
           </property>

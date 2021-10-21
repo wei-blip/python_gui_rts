@@ -16,3 +16,4 @@
   "transit": false
 }
 
+{"req":{"cw":{"cmd":"CW_ON", "cw_param":{"freq":864500000,"pwr_dbm":3,"duration":10}}}}
