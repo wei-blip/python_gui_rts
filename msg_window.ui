@@ -21,7 +21,7 @@
     <item>
      <widget class="QTabWidget" name="tabMessage">
       <property name="currentIndex">
-       <number>0</number>
+       <number>6</number>
       </property>
       <widget class="QWidget" name="devinfo_tab">
        <attribute name="title">

@@ -4,13 +4,16 @@ import time
 import msg_window
 import serial, serial.tools.list_ports, serial.threaded
 import queue
+import rts_icp_common_pb2
+import rs_0006_0_icp_pb2
 
 from PyQt5 import QtWidgets
 from enum import IntEnum
 from rs_0006_0_icp_pb2 import *
-from serial_cobs_proto import ProtoCOBS, ProtoCOBSJSON
+from serial_cobs_proto import ProtoCOBSJSON
 from cobs import cobs
 from PyQt5.QtCore import QThread
+
 
 q = queue.Queue()
 
@@ -82,13 +85,14 @@ class ProtoCOBSCat(ProtoCOBSJSON):
 
 
 class MsgWindow(QtWidgets.QMainWindow, msg_window.Ui_MsgWindow, QtWidgets.QMessageBox):
-    def __init__(self, queue_time):
+    def __init__(self, queue_time, sock):
         # Это здесь нужно для доступа к переменным, методам
         # и т.д. в файле design.py
         super().__init__()
         self.setupUi(self)  # Это нужно для инициализации нашего дизайна
 
         # Attributes begin
+        self.sock = sock
         self.current_msg = 0
         self.isOpen = False
         self.thread = 0
@@ -191,15 +195,23 @@ class MsgWindow(QtWidgets.QMainWindow, msg_window.Ui_MsgWindow, QtWidgets.QMessa
         self.tabMessage.setTabEnabled(int(index), True)
 
     def init_thread(self, port):
-        self.thread = serial.threaded.ReaderThread(port, ProtoCOBSCat)
-        self.thread.start()
-
-        (self.transport, self.protocol) = self.thread.connect()
-
-        self.protocol.set_msg_class(exch())
+        pass
+        # self.thread = serial.threaded.ReaderThread(port, ProtoCOBSCat)
+        # self.thread.start()
+        #
+        # (self.transport, self.protocol) = self.thread.connect()
+        #
+        # self.protocol.set_msg_class(exch())
 
     def send_msg(self, msg):
-        self.protocol.write_msg_json(msg, exch())
+        msg = rs_0006_0_icp_pb2.exch()
+        msg.req.req_id = 100
+        msg.req.msg = rs_0006_0_icp_pb2.rts__icp__common__pb2.devinfo_req
+        msg.transit = False
+        msg.SerializeToString()
+        msg_cobs = cobs.encode(msg)
+        self.sock.send(msg_cobs)
+        # self.protocol.write_msg_json(msg, exch())
 
     def get_time(self):
         t = time.localtime()  # get current time

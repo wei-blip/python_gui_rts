@@ -86,7 +86,7 @@ class ServWindow(QtWidgets.QMainWindow, serv.Ui_MainWindow, QtWidgets.QMessageBo
 
         # For socket begin
         self.socketIsConnect = False
-        self.sock = socket.socket()
+        self.sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)  # TCP
         self.sock_port = 0  # socket port
         self.conn = 0
         # For socket end
@@ -99,7 +99,7 @@ class ServWindow(QtWidgets.QMainWindow, serv.Ui_MainWindow, QtWidgets.QMessageBo
 
         # Other window begin
         self.queue_time = queue.Queue()
-        self.messagesWindow = MsgWindow(self.queue_time)
+        self.messagesWindow = MsgWindow(self.queue_time, self.sock)
         self.time_thread = TimeThread(self, self.queue_time)
         # Other window end
 
@@ -198,15 +198,14 @@ class ServWindow(QtWidgets.QMainWindow, serv.Ui_MainWindow, QtWidgets.QMessageBo
         port = int(self.sock_port)
         # self.sock = socket.socket()
         try:
-            self.sock.bind(('', port))
+            self.sock.connect(('localhost', port))
         except socket.error:
             self.error_dialog.setText("Address " + str(port) + " already use")
             self.listWidget.addItem("Please, change the socket port")
             self.createMessage.setEnabled(True)
             return 1
-        self.sock.listen(5)
-        self.conn, addr = self.sock.accept()
-        self.listWidget.addItem("socket connected: " + str(port) + str(', ') + str(addr))
+        # self.conn, addr = self.sock.accept()
+        self.listWidget.addItem("socket connected: " + str(port)) #+ str(', ') + str(addr))
         return 0
 
     def serial_connect(self):
