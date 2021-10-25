@@ -1,59 +1,12 @@
 import serv
 import sys
 import socket
-import time
 import queue
 import serial, serial.tools.list_ports
 
 from msg_window_cls import MsgWindow, TabIndex
 from PyQt5 import QtWidgets
-from PyQt5.QtCore import QThread
-
-
-# Thread for sending and receiving message from socket
-class SockThread(QThread):
-    def __init__(self, serv_win, queue, parent=None):
-        QThread.__init__(self, parent)
-        self.queue = queue
-        self.serv_win = serv_win
-        self.run = False
-
-    def run(self):
-        while self.run:
-            # self.serv_win.listWidget.addItem("socket thread")
-            # time.sleep(0.5)
-            pass
-
-
-# Thread to display time begin
-class TimeThread(QThread):
-    def __init__(self, serv_win, queue, parent=None):
-        QThread.__init__(self, parent)
-        self.serv_win = serv_win
-        self.queue = queue
-
-    def run(self):
-        while True:
-            if not self.queue.empty():
-                self.serv_win.listWidget.addItem(self.queue.get_nowait())
-                self.queue.task_done()
-            time.sleep(1)
-# Thread to display time end
-
-
-# Thread for scanning GUI
-class ScanThread(QThread):
-    def __init__(self, serv_win, queue, parent=None):
-        QThread.__init__(self, parent)
-        self.serv_win = serv_win
-        self.queue = queue
-        self.run = False
-
-    def run(self):
-        while self.run:
-            # self.serv_win.listWidget.addItem("scan thread")
-            # time.sleep(1)
-            pass
+from MyThreads import SockThread, ScanThread, TimeThread
 
 
 class ServWindow(QtWidgets.QMainWindow, serv.Ui_MainWindow, QtWidgets.QMessageBox):
@@ -72,7 +25,7 @@ class ServWindow(QtWidgets.QMainWindow, serv.Ui_MainWindow, QtWidgets.QMessageBo
         # For GUI begin
         self.createMessage.clicked.connect(self.create_message)  # methods for sending created message to client
         self.fill_combo_box(["Choice message", "devinfo_req", "mcu_telemetry_req", "ds18b20_req", "adx1345_req",
-                              "vibro_rms_req", "reboot", "cw_req", "join_key_req"], "message")  # fill combo box field
+                             "vibro_rms_req", "reboot", "cw_req", "join_key_req"], "message")  # fill combo box field
         self.fill_combo_box(["Choice baudrate", "300", "1200", "2400", "4800", "9600", "19200", "38400",
                              "57600", "115200"], "baudrate")  # fill combo box baudrate
         self.fill_combo_box(0, "serial_ports")  # fill combo box serial ports
@@ -103,9 +56,9 @@ class ServWindow(QtWidgets.QMainWindow, serv.Ui_MainWindow, QtWidgets.QMessageBo
         self.time_thread = TimeThread(self, self.queue_time)
         # Other window end
 
-# This function filling combo box items
-# arr - array of with elements combo box items
-# combo_box - select combo box which will be filling
+    # This function filling combo box items
+    # arr - array of with elements combo box items
+    # combo_box - select combo box which will be filling
     def fill_combo_box(self, arr, combo_box_type):
         if combo_box_type == "message":
             for i in arr:
@@ -118,9 +71,9 @@ class ServWindow(QtWidgets.QMainWindow, serv.Ui_MainWindow, QtWidgets.QMessageBo
             for port in list(serial.tools.list_ports.comports()):
                 self.serialPort.addItem(str(port.device))
 
-# This function returns condition of GUI fields
-# return value is list of elements GUI fields
-# value has GUI fields order
+    # This function returns condition of GUI fields
+    # return value is list of elements GUI fields
+    # value has GUI fields order
     def read_param(self):
         self.sock_port = self.socketPort.text()  # get socket port number
         self.ser_port = self.serialPort.currentText()  # get serial port number
@@ -163,9 +116,9 @@ class ServWindow(QtWidgets.QMainWindow, serv.Ui_MainWindow, QtWidgets.QMessageBo
             self.open_tab(TabIndex.JOIN_KEY)
             return 0
 
-# This function is callback on button pushing
-# here launched threading
-# here connect socket
+    # This function is callback on button pushing
+    # here launched threading
+    # here connect socket
     def create_message(self):
         self.createMessage.setEnabled(False)  # disable button while message sending
 
@@ -179,7 +132,7 @@ class ServWindow(QtWidgets.QMainWindow, serv.Ui_MainWindow, QtWidgets.QMessageBo
             if self.sock_connect():
                 return 1
             # self.messagesWindow.ser_port = self.ser
-            self.messagesWindow.init_thread(self.ser)
+            # self.messagesWindow.init_thread(self.ser)
             self.serialPort.setEnabled(False)  # block fields with input serial port
             self.socketPort.setEnabled(False)  # block fields with input socket port
             self.baudrateSerialPort.setEnabled(False)  # block fields with input baudrate serial port
@@ -193,7 +146,7 @@ class ServWindow(QtWidgets.QMainWindow, serv.Ui_MainWindow, QtWidgets.QMessageBo
         if self.select_msg_param() == 1:
             return 1
 
-# This function connected to socket port
+    # This function connected to socket port
     def sock_connect(self):
         port = int(self.sock_port)
         # self.sock = socket.socket()
@@ -205,7 +158,7 @@ class ServWindow(QtWidgets.QMainWindow, serv.Ui_MainWindow, QtWidgets.QMessageBo
             self.createMessage.setEnabled(True)
             return 1
         # self.conn, addr = self.sock.accept()
-        self.listWidget.addItem("socket connected: " + str(port)) #+ str(', ') + str(addr))
+        self.listWidget.addItem("Socket connected to port: " + str(port))  # + str(', ') + str(addr))
         return 0
 
     def serial_connect(self):
@@ -238,7 +191,6 @@ def main():
     serv_win.show()  # Показываем окно
     serv_app.exec_()  # и запускаем приложение
     serv_win.sock.close()  # closing socket connection
-    serv_win.messagesWindow.thread.close()  # closing thread
     serv_win.ser.close()  # closing serial port connection
 
 
