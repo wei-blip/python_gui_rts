@@ -37,17 +37,11 @@ p, li { white-space: pre-wrap; }
          </widget>
         </item>
         <item>
-         <widget class="QComboBox" name="serialPort"/>
-        </item>
-        <item>
          <widget class="QLineEdit" name="socketPort">
           <property name="placeholderText">
            <string>Socket port</string>
           </property>
          </widget>
-        </item>
-        <item>
-         <widget class="QComboBox" name="baudrateSerialPort"/>
         </item>
         <item>
          <widget class="QComboBox" name="choiceMessage">

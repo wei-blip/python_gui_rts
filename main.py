@@ -2,11 +2,11 @@ import serv
 import sys
 import socket
 import queue
-import serial, serial.tools.list_ports
+import serial.tools.list_ports
 
 from msg_window_cls import MsgWindow, TabIndex
 from PyQt5 import QtWidgets
-from MyThreads import SockThread, ScanThread, TimeThread
+from MyThreads import TimeThread, ReaderSocketThread
 
 
 class ServWindow(QtWidgets.QMainWindow, serv.Ui_MainWindow, QtWidgets.QMessageBox):
@@ -24,18 +24,10 @@ class ServWindow(QtWidgets.QMainWindow, serv.Ui_MainWindow, QtWidgets.QMessageBo
 
         # For GUI begin
         self.createMessage.clicked.connect(self.create_message)  # methods for sending created message to client
+        # fill combo box field
         self.fill_combo_box(["Choice message", "devinfo_req", "mcu_telemetry_req", "ds18b20_req", "adx1345_req",
-                             "vibro_rms_req", "reboot", "cw_req", "join_key_req"], "message")  # fill combo box field
-        self.fill_combo_box(["Choice baudrate", "300", "1200", "2400", "4800", "9600", "19200", "38400",
-                             "57600", "115200"], "baudrate")  # fill combo box baudrate
-        self.fill_combo_box(0, "serial_ports")  # fill combo box serial ports
+                             "vibro_rms_req", "reboot", "cw_req", "join_key_req", "vibro_req"])
         # For GUI end
-
-        # For serial begin
-        self.ser = serial.Serial()
-        self.ser_port = 0  # serial port
-        self.ser_port_baudrate = 0  # baudrate serial port
-        # For serial end
 
         # For socket begin
         self.socketIsConnect = False
@@ -44,42 +36,30 @@ class ServWindow(QtWidgets.QMainWindow, serv.Ui_MainWindow, QtWidgets.QMessageBo
         self.conn = 0
         # For socket end
 
-        # For threading begin
-        self.queue = queue.Queue()
-        self.scan_thread = ScanThread(self, self.queue)
-        self.sock_thread = SockThread(self, self.queue)
-        # For threading end
+        # Threads begin
+        self.queue_time = queue.Queue()
+        self.reader_thread = ReaderSocketThread(self)  # Threads for reading from socke
+        self.time_thread = TimeThread(self, self.queue_time)  # t
+        self.threads_list = [self.reader_thread, self.time_thread]
+        # Threads end
 
         # Other window begin
-        self.queue_time = queue.Queue()
-        self.messagesWindow = MsgWindow(self.queue_time, self.sock)
-        self.time_thread = TimeThread(self, self.queue_time)
+        self.messagesWindow = MsgWindow(self.queue_time, self.sock, self.reader_thread)
         # Other window end
 
     # This function filling combo box items
     # arr - array of with elements combo box items
     # combo_box - select combo box which will be filling
-    def fill_combo_box(self, arr, combo_box_type):
-        if combo_box_type == "message":
-            for i in arr:
-                self.choiceMessage.addItem(str(i))
-        elif combo_box_type == "baudrate":
-            for i in arr:
-                self.baudrateSerialPort.addItem(str(i))
-        elif combo_box_type == "serial_ports":
-            self.serialPort.addItem("Choice serial port")
-            for port in list(serial.tools.list_ports.comports()):
-                self.serialPort.addItem(str(port.device))
+    def fill_combo_box(self, arr):
+        for i in arr:
+            self.choiceMessage.addItem(str(i))
 
     # This function returns condition of GUI fields
     # return value is list of elements GUI fields
     # value has GUI fields order
     def read_param(self):
         self.sock_port = self.socketPort.text()  # get socket port number
-        self.ser_port = self.serialPort.currentText()  # get serial port number
-        self.ser_port_baudrate = self.baudrateSerialPort.currentText()  # get serial port baudrate
-        if (not self.sock_port) or (self.ser_port == "Choice serial port") or \
-                (self.ser_port_baudrate == "Choice baudrate"):
+        if not self.sock_port:
             self.error_dialog.setText("Please fill in all fields")
             self.error_dialog.exec_()
             self.createMessage.setEnabled(True)
@@ -114,6 +94,8 @@ class ServWindow(QtWidgets.QMainWindow, serv.Ui_MainWindow, QtWidgets.QMessageBo
             return 0
         elif msg == "join_key_req":
             self.open_tab(TabIndex.JOIN_KEY)
+        elif msg == "vibro_req":
+            self.open_tab(TabIndex.VIBRO)
             return 0
 
     # This function is callback on button pushing
@@ -121,35 +103,24 @@ class ServWindow(QtWidgets.QMainWindow, serv.Ui_MainWindow, QtWidgets.QMessageBo
     # here connect socket
     def create_message(self):
         self.createMessage.setEnabled(False)  # disable button while message sending
-
         if not self.socketIsConnect:  # check socket connection
             if self.read_param():
                 self.listWidget.addItem("Please fill in all fields")
                 self.createMessage.setEnabled(True)
                 return 1
-            if self.serial_connect():
-                return 1
+            # if self.serial_connect():
+            #     return 1
             if self.sock_connect():
                 return 1
-            # self.messagesWindow.ser_port = self.ser
-            # self.messagesWindow.init_thread(self.ser)
-            self.serialPort.setEnabled(False)  # block fields with input serial port
             self.socketPort.setEnabled(False)  # block fields with input socket port
-            self.baudrateSerialPort.setEnabled(False)  # block fields with input baudrate serial port
-            self.socketIsConnect = True
-
-        # self.sock_thread.run = True
-        # self.scan_thread.run = True
-        # self.scan_thread.start()  # start scan thread
-        # self.sock_thread.start()  # start sock thread
         self.time_thread.start()  # start time thread
         if self.select_msg_param() == 1:
             return 1
 
+    # Socket connection begin
     # This function connected to socket port
     def sock_connect(self):
         port = int(self.sock_port)
-        # self.sock = socket.socket()
         try:
             self.sock.connect(('localhost', port))
         except socket.error:
@@ -157,25 +128,11 @@ class ServWindow(QtWidgets.QMainWindow, serv.Ui_MainWindow, QtWidgets.QMessageBo
             self.listWidget.addItem("Please, change the socket port")
             self.createMessage.setEnabled(True)
             return 1
-        # self.conn, addr = self.sock.accept()
         self.listWidget.addItem("Socket connected to port: " + str(port))  # + str(', ') + str(addr))
+        self.socketIsConnect = True
+        self.reader_thread.start()
         return 0
-
-    def serial_connect(self):
-        try:
-            # init serial port: port_number=self.ser_port, baudrate=self.ser_port_baudrate, timeout = 1 sec
-            self.ser = serial.serial_for_url(self.ser_port, int(self.ser_port_baudrate), timeout=1)
-        except serial.SerialException:
-            self.error_dialog.setText("Serial port " + str(self.ser_port) + " not found!")
-            self.error_dialog.show()
-            self.createMessage.setEnabled(True)
-            return 1
-        except ValueError:
-            self.error_dialog.setText("Incorrect serial port parameters!")
-            self.error_dialog.show()
-            self.createMessage.setEnabled(True)
-            return 1
-        return 0
+    # Socket connection end
 
     def open_tab(self, index):
         if not self.messagesWindow.isOpen:
@@ -184,6 +141,24 @@ class ServWindow(QtWidgets.QMainWindow, serv.Ui_MainWindow, QtWidgets.QMessageBo
         self.messagesWindow.enable_tab(index)
         self.createMessage.setEnabled(True)
 
+    # Close threads begin
+    def close_threads(self):
+        for thread in self.threads_list:
+            thread.quit()
+    # Close threads end
+
+    def closeEvent(self, event):
+        close_dialog = QtWidgets.QMessageBox.question(
+            self, "Message",
+            "Are you sure you want to quit?",
+            QtWidgets.QMessageBox.Close | QtWidgets.QMessageBox.Cancel
+        )
+        if close_dialog == QtWidgets.QMessageBox.Close:
+            self.close_threads()
+            event.accept()
+        else:
+            event.ignore()
+
 
 def main():
     serv_app = QtWidgets.QApplication(sys.argv)  # Новый экземпляр QApplication
@@ -191,7 +166,6 @@ def main():
     serv_win.show()  # Показываем окно
     serv_app.exec_()  # и запускаем приложение
     serv_win.sock.close()  # closing socket connection
-    serv_win.ser.close()  # closing serial port connection
 
 
 if __name__ == '__main__':  # Если мы запускаем файл напрямую, а не импортируем

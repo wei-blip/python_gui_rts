@@ -21,7 +21,7 @@
     <item>
      <widget class="QTabWidget" name="tabMessage">
       <property name="currentIndex">
-       <number>6</number>
+       <number>7</number>
       </property>
       <widget class="QWidget" name="devinfo_tab">
        <attribute name="title">
@@ -252,6 +252,23 @@
          <widget class="QPushButton" name="setCwMode">
           <property name="text">
            <string>Set in CW mode</string>
+          </property>
+         </widget>
+        </item>
+       </layout>
+      </widget>
+      <widget class="QWidget" name="vibro_tab">
+       <attribute name="title">
+        <string>Vibro</string>
+       </attribute>
+       <layout class="QVBoxLayout" name="verticalLayout_11">
+        <item>
+         <widget class="QListWidget" name="listWidgetVibro"/>
+        </item>
+        <item>
+         <widget class="QPushButton" name="getVibro">
+          <property name="text">
+           <string>Get vibro measurements</string>
           </property>
          </widget>
         </item>
