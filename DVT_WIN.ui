@@ -10,6 +10,9 @@
     <height>898</height>
    </rect>
   </property>
+  <property name="contextMenuPolicy">
+   <enum>Qt::DefaultContextMenu</enum>
+  </property>
   <property name="windowTitle">
    <string>MainWindow</string>
   </property>
@@ -179,7 +182,7 @@
      <enum>QAbstractItemView::ScrollPerPixel</enum>
     </property>
     <property name="gridStyle">
-     <enum>Qt::CustomDashLine</enum>
+     <enum>Qt::SolidLine</enum>
     </property>
     <property name="rowCount">
      <number>6</number>
@@ -187,14 +190,23 @@
     <property name="columnCount">
      <number>1</number>
     </property>
+    <attribute name="horizontalHeaderVisible">
+     <bool>false</bool>
+    </attribute>
+    <attribute name="horizontalHeaderCascadingSectionResizes">
+     <bool>false</bool>
+    </attribute>
     <attribute name="horizontalHeaderMinimumSectionSize">
-     <number>43</number>
+     <number>307</number>
     </attribute>
     <attribute name="horizontalHeaderDefaultSectionSize">
      <number>307</number>
     </attribute>
+    <attribute name="verticalHeaderMinimumSectionSize">
+     <number>40</number>
+    </attribute>
     <attribute name="verticalHeaderDefaultSectionSize">
-     <number>37</number>
+     <number>38</number>
     </attribute>
     <row/>
     <row/>
@@ -296,14 +308,20 @@
     <property name="columnCount">
      <number>1</number>
     </property>
+    <attribute name="horizontalHeaderVisible">
+     <bool>false</bool>
+    </attribute>
     <attribute name="horizontalHeaderMinimumSectionSize">
-     <number>43</number>
+     <number>297</number>
     </attribute>
     <attribute name="horizontalHeaderDefaultSectionSize">
      <number>297</number>
     </attribute>
+    <attribute name="verticalHeaderMinimumSectionSize">
+     <number>50</number>
+    </attribute>
     <attribute name="verticalHeaderDefaultSectionSize">
-     <number>42</number>
+     <number>50</number>
     </attribute>
     <row/>
     <row/>
@@ -361,11 +379,17 @@
     <property name="columnCount">
      <number>1</number>
     </property>
+    <attribute name="horizontalHeaderVisible">
+     <bool>false</bool>
+    </attribute>
     <attribute name="horizontalHeaderDefaultSectionSize">
      <number>298</number>
     </attribute>
+    <attribute name="verticalHeaderMinimumSectionSize">
+     <number>66</number>
+    </attribute>
     <attribute name="verticalHeaderDefaultSectionSize">
-     <number>56</number>
+     <number>66</number>
     </attribute>
     <row/>
     <row/>
@@ -422,11 +446,17 @@
     <property name="columnCount">
      <number>1</number>
     </property>
+    <attribute name="horizontalHeaderVisible">
+     <bool>false</bool>
+    </attribute>
     <attribute name="horizontalHeaderDefaultSectionSize">
      <number>298</number>
     </attribute>
+    <attribute name="verticalHeaderMinimumSectionSize">
+     <number>40</number>
+    </attribute>
     <attribute name="verticalHeaderDefaultSectionSize">
-     <number>34</number>
+     <number>40</number>
     </attribute>
     <row/>
     <row/>
@@ -472,11 +502,17 @@
     <property name="columnCount">
      <number>1</number>
     </property>
+    <attribute name="horizontalHeaderVisible">
+     <bool>false</bool>
+    </attribute>
     <attribute name="horizontalHeaderDefaultSectionSize">
      <number>300</number>
     </attribute>
+    <attribute name="verticalHeaderMinimumSectionSize">
+     <number>66</number>
+    </attribute>
     <attribute name="verticalHeaderDefaultSectionSize">
-     <number>56</number>
+     <number>66</number>
     </attribute>
     <row/>
     <row/>
