@@ -11,7 +11,7 @@ class JSONProtobufProto:
         # Receive attribute begin
         self.in_msg = exch()  # in_msg is a Protobuf message
         self.json_string = '{}'  # output_data is data from device
-        self.is_received = False
+        self.free = False
         # Receive attribute end
 
         # Transmit attribute begin
@@ -22,7 +22,7 @@ class JSONProtobufProto:
     # Receive methods begin
     def handle_msg_json(self, data):
         self.json_string = data
-        self.is_received = True
+        self.free = True
 
     def handle_msg(self, msg):
         self.handle_msg_json(MessageToJson(msg, including_default_value_fields=True))
