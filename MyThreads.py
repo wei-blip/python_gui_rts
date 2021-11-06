@@ -1,4 +1,5 @@
 import json
+import queue
 import socket
 import time
 
@@ -47,15 +48,22 @@ class TimeThread(QThread):
             time.sleep(1)
 
 
+# This class transmit and receive messages from socket and putting into processing queue for next processing
+# If was socket timeout exception generated socket_timeout_signal and thread sleeping on 1 second
 class TransmitReceiveThread(QThread, JSONProtobufProto):
-    mutex = QMutex()
+    # mutex = QMutex()
     per_signal = pyqtSignal(str)
+    socket_timeout_signal = pyqtSignal()
+    queue_full_signal = pyqtSignal(str)
+    queue_empty_signal = pyqtSignal(str)
 
     def __init__(self, queue_message, queue_processing_master, queue_processing_slave):
         super().__init__()
+        # Queues begin
         self.queue_message = queue_message
         self.queue_processing_master = queue_processing_master
         self.queue_processing_slave = queue_processing_slave
+        # Queues end
 
         # For PER begin
         self.per = False
@@ -78,8 +86,10 @@ class TransmitReceiveThread(QThread, JSONProtobufProto):
 
     def run(self):
         while True:
+            # This for sending and receive message through socket
+            # This is default mode
             if (not self.queue_message.empty()) and self.socketIsConnect and (not self.per):
-                TransmitReceiveThread.mutex.lock()
+                # TransmitReceiveThread.mutex.lock()
                 q_item_msg = self.queue_message.get_nowait()
                 json_msg = q_item_msg.json_msg
                 msg_type = q_item_msg.msg_type
@@ -94,11 +104,10 @@ class TransmitReceiveThread(QThread, JSONProtobufProto):
                 try:
                     data = self.sock.recv(128)
                 except socket.timeout:
-                    self.error_dialog.setText("Socket timeout!\n"
-                                              "Maybe you are don't connect UART?")
-                    self.error_dialog.show()
-                    TransmitReceiveThread.mutex.unlock()
+                    self.socket_timeout_signal.emit()
+                    self.msleep(1000)
                     continue
+                self.queue_message.task_done()
 
                 if data:
                     buf.extend(data)
@@ -109,13 +118,21 @@ class TransmitReceiveThread(QThread, JSONProtobufProto):
                     q_item_proc.msg_type = q_item_msg.msg_type
                     q_item_proc.json_string = self.json_string
                     if not transit:
-                        self.queue_processing_master.put_nowait(q_item_proc)
-                        self.queue_message.task_done()
+                        try:
+                            self.queue_processing_master.put(q_item_proc, block=True, timeout=1)
+                        except queue.Full:
+                            self.queue_full_signal.emit("Your message not sending because one of"
+                                                        " queue (queue_processing_master) if full, please try later")
+                            break
                     else:
-                        self.queue_processing_slave.put_nowait(q_item_proc)
-                        self.queue_message.task_done()
-                    TransmitReceiveThread.mutex.unlock()
+                        try:
+                            self.queue_processing_slave.put(q_item_proc, block=True, timeout=1)
+                        except queue.Full:
+                            self.queue_full_signal.emit("Your message not sending because one of"
+                                                        " queue (queue_processing_slave) if full, please try later")
+                            break
 
+            # This for measurement PER
             if self.per:
                 buf = bytearray()
                 self.sock.settimeout(1)
@@ -129,7 +146,7 @@ class TransmitReceiveThread(QThread, JSONProtobufProto):
                     json_msg = json.dumps(json_dict)
                     self.write_msg_json(json_msg, exch())
                     data = b''
-                    backup = self.last_message()
+                    backup = self.get_last_message()
                     if not backup:
                         error = error + 1
                         n = n + 1
@@ -158,13 +175,16 @@ class TransmitReceiveThread(QThread, JSONProtobufProto):
         return 0
     # Socket connection end
 
-    def last_message(self):
+    # Getting last message from socket buffer begin
+    # After call this method socket buffer will be clear
+    # Return value: last message in socket buffer
+    def get_last_message(self):
         backup = ''
         buf = bytearray()
         data = b''
         while True:
             try:
-                data = self.sock.recv(256)
+                data = self.sock.recv(128)
             except socket.timeout:
                 break
             if data:
@@ -174,6 +194,7 @@ class TransmitReceiveThread(QThread, JSONProtobufProto):
                     self.handle_packet(packet)
                 backup = self.json_string
         return backup
+    # Getting last message from socket buffer end
 
 
 class ProcessingThread(QThread):
@@ -193,6 +214,7 @@ class ProcessingThread(QThread):
                 q_elem = self.queue_processing.get_nowait()
                 msg_type = q_elem.msg_type
                 json_string = q_elem.json_string
+                self.queue_processing.task_done()
                 if msg_type == 'devinfo':
                     json_dict = json.loads(json_string)
                     devinfo_elem = json_dict.get("resp").get("devinfo")
@@ -236,8 +258,10 @@ class ProcessingThread(QThread):
                         self.fill_adxl345_field_from_slave_data_table(acc_g)
                         self.fill_radio_table(json_dict.get("resp"))
                 ProcessingThread.mutex.unlock()
-                self.msleep(100)
+            self.msleep(100)
 
+# This methods for filling table into window
+# Methods for filling table fields begin
     def fill_devinfo_field_from_master_info_table(self, json_dict):
         table = self.win.tableWidgetMasterInfo
         self.fill_table_field(table, TableRow.FIRST_ROW, TableColumn.FIRST_COLUMN, json_dict.get("devEui"))
@@ -309,56 +333,4 @@ class ProcessingThread(QThread):
             row, col,
             QtWidgets.QTableWidgetItem(str(item))
         )
-
-
-# class PerThread(QThread):
-#
-#
-#     def __init__(self):
-#         super().__init__()
-#
-#         self.is_run = False
-#
-#         # For socket
-#         self.sock = socket.socket()
-#         self.sock.settimeout(1)
-#         self.sock_port = 5050
-#         self.socketIsConnect = False
-#         # For socket
-#
-#     def run(self):
-#         self.sock_connect()
-#         buf = bytearray()
-#         json_msg = """{"req":{"devinfo":{}},"transit":true}"""
-#         n = 0
-#         error = 0
-#         while n < self.num_packet:
-#             req_id = randrange(0, 2 ** 32 - 1)
-#             json_dict = json.loads(json_msg)
-#             json_dict.get("req")["req_id"] = req_id
-#             json_msg = json.dumps(json_dict)
-#             self.write_msg_json(json_msg, exch())
-#             data = b''
-#             backup = self.last_message()
-#             resp_id = json.loads(backup).get("resp").get("respId")
-#             if resp_id != req_id:
-#                 error = error + 1
-#             n = n + 1
-#         s = """Transfer is over\nPackets send: """ + str(self.num_packet) + """\nPackets lost: """ \
-#             + str(error) + """\n """
-#         self.is_run = False
-#         self.sock.close()
-#         self.per_signal.emit(s)
-#
-#     # Socket connection begin
-#     # This function connected to socket port
-#     def sock_connect(self):
-#         try:
-#             self.sock.connect(('localhost', self.sock_port))
-#         except socket.error:
-#             self.error_dialog.setText("Address " + str(self.sock_port) + " already use")
-#             self.error_dialog.show()
-#             return 1
-#         self.socketIsConnect = True
-#         return 0
-#     # Socket connection end
+# Methods for filling table fields end

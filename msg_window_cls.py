@@ -21,11 +21,15 @@ class DvtReq(QtWidgets.QMainWindow, Ui_DVW_WIN, QtWidgets.QMessageBox):
         self.setupUi(self)
         self.setFixedSize(1082, 898)
 
-        # Error dialog begin
+        # Dialogs begin
         self.error_dialog = QtWidgets.QMessageBox()  # create error dialog object
         self.error_dialog.setIcon(QtWidgets.QMessageBox.Critical)
         self.error_dialog.setWindowTitle("Error")
-        # Error dialog end
+
+        self.warning_dialog = QtWidgets.QMessageBox()
+        self.warning_dialog.setIcon(QtWidgets.QMessageBox.Warning)
+        self.warning_dialog.setWindowTitle("Warning")
+        # Dialogs end
 
         # Table label settings begin
         self.tableWidgetMasterInfo.setVerticalHeaderLabels(["DevEui", "Family", "Version", "Join Key",
@@ -79,7 +83,6 @@ class DvtReq(QtWidgets.QMainWindow, Ui_DVW_WIN, QtWidgets.QMessageBox):
         self.tx_rx_thread = TransmitReceiveThread(self.queue_message, self.queue_processing_master,
                                                   self.queue_processing_slave)
         self.threads = [self.tx_rx_thread, self.proc_thread_master, self.proc_thread_slave]
-        self.tx_rx_thread.start()
         # For threads end
 
     # Send devinfo message begin
@@ -93,6 +96,7 @@ class DvtReq(QtWidgets.QMainWindow, Ui_DVW_WIN, QtWidgets.QMessageBox):
             q_item.transit = True
         self.transmit_receive_msg(q_item)
         return 0
+
     # Send devinfo message end
 
     # Send mcuAdc message begin
@@ -106,6 +110,7 @@ class DvtReq(QtWidgets.QMainWindow, Ui_DVW_WIN, QtWidgets.QMessageBox):
             q_item.transit = True
         self.transmit_receive_msg(q_item)
         return 0
+
     # Send mcuAdc message end
 
     # Send join key message begin
@@ -119,6 +124,7 @@ class DvtReq(QtWidgets.QMainWindow, Ui_DVW_WIN, QtWidgets.QMessageBox):
             q_item.transit = True
         self.transmit_receive_msg(q_item)
         return 0
+
     # Send join key message end
 
     # Send adxl345 message begin
@@ -132,6 +138,7 @@ class DvtReq(QtWidgets.QMainWindow, Ui_DVW_WIN, QtWidgets.QMessageBox):
             q_item.transit = True
         self.transmit_receive_msg(q_item)
         return 0
+
     # Send adxl345 message end
 
     # Send ds18b20 message begin
@@ -145,6 +152,7 @@ class DvtReq(QtWidgets.QMainWindow, Ui_DVW_WIN, QtWidgets.QMessageBox):
             q_item.transit = True
         self.transmit_receive_msg(q_item)
         return 0
+
     # Send ds18b20 message end
 
     # Set device in cw mode message begin
@@ -175,6 +183,7 @@ class DvtReq(QtWidgets.QMainWindow, Ui_DVW_WIN, QtWidgets.QMessageBox):
                 q_item.transit = True
         self.transmit_receive_msg(q_item)
         return 0
+
     # Set device in cw mode message end
 
     # Reboot device begin
@@ -188,6 +197,7 @@ class DvtReq(QtWidgets.QMainWindow, Ui_DVW_WIN, QtWidgets.QMessageBox):
             q_item.transit = True
         self.transmit_receive_msg(q_item)
         return 0
+
     # Reboot device end
 
     # Get vibro measurements begin
@@ -201,10 +211,16 @@ class DvtReq(QtWidgets.QMainWindow, Ui_DVW_WIN, QtWidgets.QMessageBox):
             q_item.transit = True
         self.transmit_receive_msg(q_item)
         return 0
+
     # Get vibro measurements end
 
     def transmit_receive_msg(self, q_item):
-        self.queue_message.put_nowait(q_item)
+        try:
+            self.queue_message.put(q_item, block=True, timeout=1)
+        except queue.Full:
+            self.tx_rx_thread.queue_full_signal.emit("Your message not sending because one of queue "
+                                                     "if full(queue_message), please try later")
+            return
 
 
 # Get time begin

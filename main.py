@@ -35,10 +35,12 @@ class DvtApp(DvtReq):
         # self.json_list = list()
         # # Buffers end
 
-        # For receive vibro data begin
-        # self.per_thread = PerThread()
+        # My signal callbacks begin
         self.tx_rx_thread.per_signal.connect(self.per_result)
-        # For receive vibro data end
+        self.tx_rx_thread.socket_timeout_signal.connect(self.socket_timeout)
+        self.tx_rx_thread.queue_full_signal.connect(self.queue_warning)
+        self.tx_rx_thread.queue_empty_signal.connect(self.queue_warning)
+        # My signal callbacks end
 
         # Timer begin
         self.vibro_timer = QTimer()
@@ -101,6 +103,7 @@ class DvtApp(DvtReq):
         self.slave_get_vibro()
 
     def showEvent(self, event):
+        self.tx_rx_thread.start()
         self.proc_thread_master.start()
         self.master_get_info()
         self.master_get_vibro()
@@ -133,6 +136,15 @@ class DvtApp(DvtReq):
     def per_result(self, result):
         self.listWidgetPER.addItem(result)
         self.vibro_timer.start()
+
+    def socket_timeout(self):
+        self.error_dialog.setText("Socket timeout!\n"
+                                  "Maybe you are don't connect UART?")
+        self.error_dialog.show()
+
+    def queue_warning(self, text):
+        self.warning_dialog.setText(text)
+        self.warning_dialog.show()
 
 
 def main():
