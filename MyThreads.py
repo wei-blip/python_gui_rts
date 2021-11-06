@@ -1,10 +1,35 @@
 import json
 import socket
+import time
 
 from rs_0006_0_icp_pb2 import *
-from PyQt5.QtCore import QThread, QMutex
+from PyQt5.QtCore import QThread, QMutex, pyqtSignal
 from PyQt5 import QtWidgets
-import time
+from json_protobuf_proto import JSONProtobufProto
+from enum import IntEnum
+from dataclasses import dataclass
+from random import randrange
+
+
+class TableRow(IntEnum):
+    FIRST_ROW = 0
+    SECOND_ROW = 1
+    THIRD_ROW = 2
+    FOURTH_ROW = 3
+    FIFTH_ROW = 4
+    SIXTH_ROW = 5
+
+
+class TableColumn(IntEnum):
+    FIRST_COLUMN = 0
+    SECOND_COLUMN = 1
+    THIRD_COLUMN = 2
+
+
+@dataclass
+class QueueProcessing:
+    json_string: str = ''
+    msg_type: str = ''
 
 
 # Thread to display time begin
@@ -22,115 +47,318 @@ class TimeThread(QThread):
             time.sleep(1)
 
 
-class TransmitReceiveThread(QThread):
+class TransmitReceiveThread(QThread, JSONProtobufProto):
     mutex = QMutex()
+    per_signal = pyqtSignal(str)
 
-    def __init__(self, win, queue_message, queue_processing, parent=None):
-        QThread.__init__(self, parent)
-        self.win = win
+    def __init__(self, queue_message, queue_processing_master, queue_processing_slave):
+        super().__init__()
         self.queue_message = queue_message
-        self.queue_processing = queue_processing
+        self.queue_processing_master = queue_processing_master
+        self.queue_processing_slave = queue_processing_slave
+
+        # For PER begin
+        self.per = False
+        self.num_packet = 5
+        # For PER end
+
+        # Error dialog begin
+        self.error_dialog = QtWidgets.QMessageBox()  # create error dialog object
+        self.error_dialog.setIcon(QtWidgets.QMessageBox.Critical)
+        self.error_dialog.setWindowTitle("Error")
+        # Error dialog end
+
+        # For socket
+        self.sock = socket.socket()
+        self.sock.settimeout(5)
+        self.sock_port = 5050
+        self.socketIsConnect = False
+        self.sock_connect()
+        # For socket
 
     def run(self):
         while True:
-            if not self.queue_message.empty():
+            if (not self.queue_message.empty()) and self.socketIsConnect and (not self.per):
                 TransmitReceiveThread.mutex.lock()
-                msg_dict = self.queue_message.get_nowait()
-                msg_key = list(msg_dict.keys()).pop(0)
+                q_item_msg = self.queue_message.get_nowait()
+                json_msg = q_item_msg.json_msg
+                msg_type = q_item_msg.msg_type
+                transit = q_item_msg.transit
                 buf = bytearray()
-                self.win.write_msg_json(msg_dict.get(msg_key), exch())
+
+                self.write_msg_json(json_msg, exch())
                 data = b''
-                if msg_key == 'cw':
+                if msg_type == 'cw' or msg_type == 'reboot_dev':
                     TransmitReceiveThread.mutex.unlock()
                     continue
                 try:
-                    data = self.win.transport.recv(1024)
+                    data = self.sock.recv(128)
                 except socket.timeout:
-                    self.win.error_dialog.setText("Socket timeout!")
-                    self.win.error_dialog.show()
+                    self.error_dialog.setText("Socket timeout!\n"
+                                              "Maybe you are don't connect UART?")
+                    self.error_dialog.show()
                     TransmitReceiveThread.mutex.unlock()
                     continue
 
                 if data:
                     buf.extend(data)
-                    while self.win.TERMINATOR in buf:
-                        packet, buf = buf.split(self.win.TERMINATOR, 1)
-                        self.win.handle_packet(packet)
-                    elem = {msg_key: self.win.json_string}
-                    self.queue_processing.put_nowait(elem)
-                    self.queue_processing.task_done()
+                    while self.TERMINATOR in buf:
+                        packet, buf = buf.split(self.TERMINATOR, 1)
+                        self.handle_packet(packet)
+                    q_item_proc = QueueProcessing()
+                    q_item_proc.msg_type = q_item_msg.msg_type
+                    q_item_proc.json_string = self.json_string
+                    if not transit:
+                        self.queue_processing_master.put_nowait(q_item_proc)
+                        self.queue_message.task_done()
+                    else:
+                        self.queue_processing_slave.put_nowait(q_item_proc)
+                        self.queue_message.task_done()
                     TransmitReceiveThread.mutex.unlock()
+
+            if self.per:
+                buf = bytearray()
+                self.sock.settimeout(1)
+                json_msg = """{"req":{"devinfo":{}},"transit":true}"""
+                n = 0
+                error = 0
+                while n < self.num_packet:
+                    req_id = randrange(0, 2 ** 32 - 1)
+                    json_dict = json.loads(json_msg)
+                    json_dict.get("req")["req_id"] = req_id
+                    json_msg = json.dumps(json_dict)
+                    self.write_msg_json(json_msg, exch())
+                    data = b''
+                    backup = self.last_message()
+                    if not backup:
+                        error = error + 1
+                        n = n + 1
+                        continue
+                    resp_id = json.loads(backup).get("resp").get("respId")
+                    if resp_id != req_id:
+                        error = error + 1
+                    n = n + 1
+                s = """Transfer is over\nPackets send: """ + str(self.num_packet) + """\nPackets lost: """ \
+                    + str(error) + """\n """
+                self.per = False
+                self.sock.settimeout(5)
+                self.per_signal.emit(s)
+            self.msleep(100)
+
+    # Socket connection begin
+    # This function connected to socket port
+    def sock_connect(self):
+        try:
+            self.sock.connect(('localhost', self.sock_port))
+        except socket.error:
+            self.error_dialog.setText("Address " + str(self.sock_port) + " already use")
+            self.error_dialog.show()
+            return 1
+        self.socketIsConnect = True
+        return 0
+    # Socket connection end
+
+    def last_message(self):
+        backup = ''
+        buf = bytearray()
+        data = b''
+        while True:
+            try:
+                data = self.sock.recv(256)
+            except socket.timeout:
+                break
+            if data:
+                buf.extend(data)
+                while self.TERMINATOR in buf:
+                    packet, buf = buf.split(self.TERMINATOR, 1)
+                    self.handle_packet(packet)
+                backup = self.json_string
+        return backup
 
 
 class ProcessingThread(QThread):
     mutex = QMutex()
 
-    def __init__(self, win, queue_processing, parent=None):
+    def __init__(self, win, queue_processing, is_master, parent=None):
         QThread.__init__(self, parent)
         self.win = win
         self.queue_processing = queue_processing
+        self.is_master = is_master
+        self.per = False
 
     def run(self):
         while True:
-            if not self.queue_processing.empty():
+            if (not self.queue_processing.empty()) and (not self.per):
                 ProcessingThread.mutex.lock()
-                elem = self.queue_processing.get_nowait()
-                elem_key = list(elem.keys()).pop(0)
-                if elem_key == 'devinfo':
-                    elem = elem.get("devinfo")
-                    json_elem = json.loads(elem)
-                    devinfo_elem = json_elem.get("resp").get("devinfo")
-                    self.win.tableWidgetMasterInfo.setItem(
-                        0, 0, QtWidgets.QTableWidgetItem(str(devinfo_elem.get("devEui")))
-                    )
-                    self.win.tableWidgetMasterInfo.setItem(
-                        1, 0, QtWidgets.QTableWidgetItem(str(devinfo_elem.get("family")))
-                    )
-                    self.win.tableWidgetMasterInfo.setItem(
-                        2, 0, QtWidgets.QTableWidgetItem(str(devinfo_elem.get("version")))
-                    )
-                elif elem_key == 'joinKey':
-                    elem = elem.get("joinKey")
-                    json_elem = json.loads(elem)
-                    self.win.tableWidgetMasterInfo.setItem(
-                        3, 0, QtWidgets.QTableWidgetItem(str(json_elem.get("resp").get("joinKey").get("joinKey")))
-                    )
-                elif elem_key == 'ds18b20':
-                    elem = elem.get("ds18b20")
-                    json_elem = json.loads(elem)
-                    self.win.tableWidgetMasterInfo.setItem(
-                        4, 0, QtWidgets.QTableWidgetItem(str(json_elem.get("resp").get("ds18b20").get("temp")))
-                    )
-                elif elem_key == 'mcuAdc':
-                    elem = elem.get("mcuAdc")
-                    json_elem = json.loads(elem)
-                    self.win.tableWidgetMasterInfo.setItem(
-                        5, 0, QtWidgets.QTableWidgetItem(str(json_elem.get("resp").get("mcuAdc").get("mcuTemperature")))
-                    )
-                elif elem_key == 'vibro':
-                    elem = elem.get("vibro")
-                    json_elem = json.loads(elem)
-                    vrms = json_elem.get("resp").get("vibro").get("vrms")
-                    self.win.tableWidgetMasterVibro.setItem(
-                        0, 0, QtWidgets.QTableWidgetItem(str(vrms.get("x")))
-                    )
-                    self.win.tableWidgetMasterVibro.setItem(
-                        1, 0, QtWidgets.QTableWidgetItem(str(vrms.get("x")))
-                    )
-                    self.win.tableWidgetMasterVibro.setItem(
-                        2, 0, QtWidgets.QTableWidgetItem(str(vrms.get("x")))
-                    )
-                elif elem_key == 'adxl345':
-                    elem = elem.get("adxl345")
-                    json_elem = json.loads(elem)
-                    acc_g = json_elem.get("resp").get("adxl345").get("accG")
-                    self.win.tableWidgetMasterVibro.setItem(
-                        0, 1, QtWidgets.QTableWidgetItem(str(acc_g.get("x")))
-                    )
-                    self.win.tableWidgetMasterVibro.setItem(
-                        1, 1, QtWidgets.QTableWidgetItem(str(acc_g.get("y")))
-                    )
-                    self.win.tableWidgetMasterVibro.setItem(
-                        2, 1, QtWidgets.QTableWidgetItem(str(acc_g.get("z")))
-                    )
+                q_elem = self.queue_processing.get_nowait()
+                msg_type = q_elem.msg_type
+                json_string = q_elem.json_string
+                if msg_type == 'devinfo':
+                    json_dict = json.loads(json_string)
+                    devinfo_elem = json_dict.get("resp").get("devinfo")
+                    if self.is_master:
+                        self.fill_devinfo_field_from_master_info_table(devinfo_elem)
+                    else:
+                        self.fill_devinfo_field_from_slave_info_table(devinfo_elem)
+                elif msg_type == 'joinKey':
+                    json_dict = json.loads(json_string)
+                    if self.is_master:
+                        self.fill_join_key_field_from_master_info_table(json_dict)
+                    else:
+                        self.fill_join_key_field_from_slave_info_table(json_dict)
+                        self.fill_radio_table(json_dict.get("resp"))
+                elif msg_type == 'ds18b20':
+                    json_dict = json.loads(json_string)
+                    if self.is_master:
+                        self.fill_ds18b20_field_from_master_info_table(json_dict)
+                    else:
+                        self.fill_ds18b20_field_from_slave_data_table(json_dict)
+                elif msg_type == 'mcuAdc':
+                    json_dict = json.loads(json_string)
+                    if self.is_master:
+                        self.fill_mcu_adc_field_from_master_info_table(json_dict)
+                    else:
+                        self.fill_mcu_adc_field_from_slave_data_table(json_dict)
+                elif msg_type == 'vibro':
+                    json_dict = json.loads(json_string)
+                    vrms = json_dict.get("resp").get("vibro").get("vrms")
+                    if self.is_master:
+                        self.fill_vibro_field_from_master_vibro_table(vrms)
+                    else:
+                        self.fill_vibro_field_from_slave_vibro_table(vrms)
+                        self.fill_radio_table(json_dict.get("resp"))
+                elif msg_type == 'adxl345':
+                    json_dict = json.loads(json_string)
+                    acc_g = json_dict.get("resp").get("adxl345").get("accG")
+                    if self.is_master:
+                        self.fill_adxl345_field_from_master_vibro_table(acc_g)
+                    else:
+                        self.fill_adxl345_field_from_slave_data_table(acc_g)
+                        self.fill_radio_table(json_dict.get("resp"))
                 ProcessingThread.mutex.unlock()
+                self.msleep(100)
+
+    def fill_devinfo_field_from_master_info_table(self, json_dict):
+        table = self.win.tableWidgetMasterInfo
+        self.fill_table_field(table, TableRow.FIRST_ROW, TableColumn.FIRST_COLUMN, json_dict.get("devEui"))
+        self.fill_table_field(table, TableRow.SECOND_ROW, TableColumn.FIRST_COLUMN, json_dict.get("family"))
+        self.fill_table_field(table, TableRow.THIRD_ROW, TableColumn.FIRST_COLUMN, json_dict.get("version"))
+
+    def fill_devinfo_field_from_slave_info_table(self, json_dict):
+        table = self.win.tableWidgetSlaveInfo
+        self.fill_table_field(table, TableRow.FIRST_ROW, TableColumn.FIRST_COLUMN, json_dict.get("devEui"))
+        self.fill_table_field(table, TableRow.SECOND_ROW, TableColumn.FIRST_COLUMN, json_dict.get("family"))
+        self.fill_table_field(table, TableRow.THIRD_ROW, TableColumn.FIRST_COLUMN, json_dict.get("version"))
+
+    def fill_join_key_field_from_master_info_table(self, json_dict):
+        self.fill_table_field(self.win.tableWidgetMasterInfo, TableRow.FOURTH_ROW, TableColumn.FIRST_COLUMN,
+                              json_dict.get("resp").get("joinKey").get("joinKey"))
+
+    def fill_join_key_field_from_slave_info_table(self, json_dict):
+        self.fill_table_field(self.win.tableWidgetSlaveInfo, TableRow.FOURTH_ROW, TableColumn.FIRST_COLUMN,
+                              json_dict.get("resp").get("joinKey").get("joinKey"))
+
+    def fill_ds18b20_field_from_master_info_table(self, json_dict):
+        self.fill_table_field(self.win.tableWidgetMasterInfo, TableRow.FIFTH_ROW, TableColumn.FIRST_COLUMN,
+                              json_dict.get("resp").get("ds18b20").get("temp"))
+
+    def fill_ds18b20_field_from_slave_data_table(self, json_dict):
+        self.fill_table_field(self.win.tableWidgetSlaveData, TableRow.FOURTH_ROW, TableColumn.FIRST_COLUMN,
+                              json_dict.get("resp").get("ds18b20").get("temp"))
+
+    def fill_mcu_adc_field_from_master_info_table(self, json_dict):
+        self.fill_table_field(self.win.tableWidgetMasterInfo, TableRow.SIXTH_ROW, TableColumn.FIRST_COLUMN,
+                              json_dict.get("resp").get("mcuAdc").get("mcuTemperature"))
+
+    def fill_mcu_adc_field_from_slave_data_table(self, json_dict):
+        self.fill_table_field(self.win.tableWidgetSlaveData, TableRow.FIFTH_ROW, TableColumn.FIRST_COLUMN,
+                              json_dict.get("resp").get("mcuAdc").get("mcuTemperature"))
+
+    def fill_vibro_field_from_master_vibro_table(self, json_dict):
+        table = self.win.tableWidgetMasterVibro
+        self.fill_table_field(table, TableRow.FIRST_ROW, TableColumn.FIRST_COLUMN, json_dict.get("x"))
+        self.fill_table_field(table, TableRow.SECOND_ROW, TableColumn.FIRST_COLUMN, json_dict.get("y"))
+        self.fill_table_field(table, TableRow.THIRD_ROW, TableColumn.FIRST_COLUMN, json_dict.get("z"))
+
+    def fill_vibro_field_from_slave_vibro_table(self, json_dict):
+        table = self.win.tableWidgetSlaveVibro
+        self.fill_table_field(table, TableRow.FIRST_ROW, TableColumn.FIRST_COLUMN, json_dict.get("x"))
+        self.fill_table_field(table, TableRow.SECOND_ROW, TableColumn.FIRST_COLUMN, json_dict.get("y"))
+        self.fill_table_field(table, TableRow.THIRD_ROW, TableColumn.FIRST_COLUMN, json_dict.get("z"))
+
+    def fill_adxl345_field_from_master_vibro_table(self, json_dict):
+        table = self.win.tableWidgetMasterVibro
+        self.fill_table_field(table, TableRow.FIRST_ROW, TableColumn.SECOND_COLUMN, json_dict.get("x"))
+        self.fill_table_field(table, TableRow.SECOND_ROW, TableColumn.SECOND_COLUMN, json_dict.get("y"))
+        self.fill_table_field(table, TableRow.THIRD_ROW, TableColumn.SECOND_COLUMN, json_dict.get("z"))
+
+    def fill_adxl345_field_from_slave_data_table(self, json_dict):
+        table = self.win.tableWidgetSlaveData
+        self.fill_table_field(table, TableRow.FIRST_ROW, TableColumn.FIRST_COLUMN, json_dict.get("x"))
+        self.fill_table_field(table, TableRow.SECOND_ROW, TableColumn.FIRST_COLUMN, json_dict.get("y"))
+        self.fill_table_field(table, TableRow.THIRD_ROW, TableColumn.FIRST_COLUMN, json_dict.get("z"))
+
+    def fill_radio_table(self, json_dict):
+        table = self.win.tableWidgetSlaveRadio
+        self.fill_table_field(table, TableRow.FIRST_ROW, TableColumn.FIRST_COLUMN, json_dict.get("rssi"))
+        self.fill_table_field(table, TableRow.SECOND_ROW, TableColumn.FIRST_COLUMN, json_dict.get("snr"))
+        self.fill_table_field(table, TableRow.THIRD_ROW, TableColumn.FIRST_COLUMN, json_dict.get("fei"))
+
+    def fill_table_field(self, table, row, col, item):
+        table.setItem(
+            row, col,
+            QtWidgets.QTableWidgetItem(str(item))
+        )
+
+
+# class PerThread(QThread):
+#
+#
+#     def __init__(self):
+#         super().__init__()
+#
+#         self.is_run = False
+#
+#         # For socket
+#         self.sock = socket.socket()
+#         self.sock.settimeout(1)
+#         self.sock_port = 5050
+#         self.socketIsConnect = False
+#         # For socket
+#
+#     def run(self):
+#         self.sock_connect()
+#         buf = bytearray()
+#         json_msg = """{"req":{"devinfo":{}},"transit":true}"""
+#         n = 0
+#         error = 0
+#         while n < self.num_packet:
+#             req_id = randrange(0, 2 ** 32 - 1)
+#             json_dict = json.loads(json_msg)
+#             json_dict.get("req")["req_id"] = req_id
+#             json_msg = json.dumps(json_dict)
+#             self.write_msg_json(json_msg, exch())
+#             data = b''
+#             backup = self.last_message()
+#             resp_id = json.loads(backup).get("resp").get("respId")
+#             if resp_id != req_id:
+#                 error = error + 1
+#             n = n + 1
+#         s = """Transfer is over\nPackets send: """ + str(self.num_packet) + """\nPackets lost: """ \
+#             + str(error) + """\n """
+#         self.is_run = False
+#         self.sock.close()
+#         self.per_signal.emit(s)
+#
+#     # Socket connection begin
+#     # This function connected to socket port
+#     def sock_connect(self):
+#         try:
+#             self.sock.connect(('localhost', self.sock_port))
+#         except socket.error:
+#             self.error_dialog.setText("Address " + str(self.sock_port) + " already use")
+#             self.error_dialog.show()
+#             return 1
+#         self.socketIsConnect = True
+#         return 0
+#     # Socket connection end

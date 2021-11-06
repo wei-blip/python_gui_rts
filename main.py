@@ -1,24 +1,9 @@
-from MyThreads import ProcessingThread
 from msg_window_cls import DvtReq
 from PyQt5 import QtWidgets
-from PyQt5.QtCore import QTimer
-from enum import IntEnum
+from PyQt5.QtCore import QTimer, pyqtSignal
 from rs_0006_0_icp_pb2 import *
-
-
-class TableRow(IntEnum):
-    FIRST_ROW = 0
-    SECOND_ROW = 1
-    THIRD_ROW = 2
-    FOURTH_ROW = 3
-    FIFTH_ROW = 4
-    SIXTH_ROW = 5
-
-
-class TableColumn(IntEnum):
-    FIRST_COLUMN = 0
-    SECOND_COLUMN = 1
-    THIRD_COLUMN = 2
+from darktheme.widget_template import DarkPalette
+# from MyThreads import PerThread
 
 
 class DvtApp(DvtReq):
@@ -42,30 +27,26 @@ class DvtApp(DvtReq):
         self.pushButtonSlaveGetAll.clicked.connect(self.slave_get_all)
         # Callbacks slave end
 
-        # CW spin box begin
-        self.spinBoxMasterPower.setValue(0)
-        self.spinBoxMasterDuration.setValue(5)
-        self.spinBoxMasterFrequency.setValue(864500000)
-        # CW spin box end
-
-        # Buffers begin
-        self.cw_dict = dict()
-        self.resp_buffer = list()
-        self.vibro_buffer = list()
-        self.msg_list = list()
-        self.json_list = list()
-        # Buffers end
+        # # Buffers begin
+        # self.cw_dict = dict()
+        # self.resp_buffer = list()
+        # self.vibro_buffer = list()
+        # self.msg_list = list()
+        # self.json_list = list()
+        # # Buffers end
 
         # For receive vibro data begin
-        self.proc_thread = ProcessingThread(self, self.queue_processing)
-        self.threads = [self.tx_rx_thread, self.proc_thread]
+        # self.per_thread = PerThread()
+        self.tx_rx_thread.per_signal.connect(self.per_result)
         # For receive vibro data end
 
         # Timer begin
         self.vibro_timer = QTimer()
-        self.vibro_timer.setInterval(10000)
+        self.vibro_timer.setInterval(60000)
         self.vibro_timer.timeout.connect(self.measure_vibro)
         # Timer end
+
+        self.proc_thread_slave.start()
 
     # Filling master information table begin
     def master_get_info(self):
@@ -88,31 +69,39 @@ class DvtApp(DvtReq):
         self.set_cw_mode("CW_OFF", False)
 
     def slave_reboot(self):
-        pass
+        self.reboot_dev(True)
 
     def slave_start_cw(self):
-        pass
+        self.set_cw_mode("CW_ON", True)
 
     def slave_stop_cw(self):
-        pass
+        self.set_cw_mode("CW_ON", True)
 
     def slave_start_per(self):
-        pass
+        self.tx_rx_thread.num_packet = self.spinBoxSlavePER.value()
+        self.tx_rx_thread.per = True
+        self.vibro_timer.stop()
+        self.listWidgetPER.addItem("Transfer is started")
 
     def slave_get_info(self):
-        pass
+        self.get_dev_info(True)
+        self.get_join_key(True)
 
     def slave_get_data(self):
-        pass
+        self.get_adxl345(True)
+        self.get_ds18b20(True)
+        self.get_mcu_adc(True)
 
     def slave_get_vibro(self):
-        pass
+        self.get_vibro(True)
 
     def slave_get_all(self):
-        pass
+        self.slave_get_info()
+        self.slave_get_data()
+        self.slave_get_vibro()
 
     def showEvent(self, event):
-        self.proc_thread.start()
+        self.proc_thread_master.start()
         self.master_get_info()
         self.master_get_vibro()
         self.vibro_timer.start()
@@ -134,16 +123,21 @@ class DvtApp(DvtReq):
             QtWidgets.QMessageBox.Close | QtWidgets.QMessageBox.Cancel
         )
         if close_dialog == QtWidgets.QMessageBox.Close:
+            self.tx_rx_thread.sock.close()
             self.close_threads()
-            self.transport.close()
-            self.vibro_timer.killTimer(self.vibro_timer.timerId())
+            self.vibro_timer.stop()
             event.accept()
         else:
             event.ignore()
 
+    def per_result(self, result):
+        self.listWidgetPER.addItem(result)
+        self.vibro_timer.start()
+
 
 def main():
     dvt_app = QtWidgets.QApplication(sys.argv)
+    dvt_app.setPalette(DarkPalette())
     dvt_win = DvtApp()
     dvt_win.show()
     dvt_app.exec_()

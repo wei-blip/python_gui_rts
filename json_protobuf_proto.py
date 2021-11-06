@@ -16,7 +16,7 @@ class JSONProtobufProto:
 
         # Transmit attribute begin
         self.TERMINATOR = b'\0'
-        self.transport = None  # transport is a socket
+        self.sock = None  # transport is a socket
         # Transmit attribute end
 
     # Receive methods begin
@@ -38,7 +38,7 @@ class JSONProtobufProto:
     # Transmit methods begin
     def write_cobs(self, data):
         packet = cobs.encode(data) + self.TERMINATOR
-        self.transport.send(packet)
+        self.sock.send(packet)
 
     def write_msg_json(self, data, msg):
         jsn = Parse(data, msg)

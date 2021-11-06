@@ -206,7 +206,7 @@
      <number>40</number>
     </attribute>
     <attribute name="verticalHeaderDefaultSectionSize">
-     <number>38</number>
+     <number>40</number>
     </attribute>
     <row/>
     <row/>
@@ -689,9 +689,9 @@
     <property name="geometry">
      <rect>
       <x>750</x>
-      <y>640</y>
+      <y>680</y>
       <width>321</width>
-      <height>161</height>
+      <height>121</height>
      </rect>
     </property>
    </widget>
@@ -745,6 +745,32 @@
     </property>
     <property name="text">
      <string>GET ALL</string>
+    </property>
+   </widget>
+   <widget class="QSpinBox" name="spinBoxSlaveFrequency_2">
+    <property name="geometry">
+     <rect>
+      <x>750</x>
+      <y>640</y>
+      <width>111</width>
+      <height>32</height>
+     </rect>
+    </property>
+    <property name="maximum">
+     <number>999999999</number>
+    </property>
+   </widget>
+   <widget class="QLabel" name="labelSlaveFrequency_2">
+    <property name="geometry">
+     <rect>
+      <x>880</x>
+      <y>640</y>
+      <width>141</width>
+      <height>21</height>
+     </rect>
+    </property>
+    <property name="text">
+     <string>NUMBER OF PACKETS</string>
     </property>
    </widget>
   </widget>
