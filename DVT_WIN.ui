@@ -6,7 +6,7 @@
    <rect>
     <x>0</x>
     <y>0</y>
-    <width>1082</width>
+    <width>1469</width>
     <height>898</height>
    </rect>
   </property>
@@ -268,7 +268,7 @@
    <widget class="QLabel" name="labelSlaveDevInfo">
     <property name="geometry">
      <rect>
-      <x>610</x>
+      <x>590</x>
       <y>10</y>
       <width>271</width>
       <height>21</height>
@@ -497,7 +497,7 @@
      <enum>QAbstractItemView::ScrollPerPixel</enum>
     </property>
     <property name="rowCount">
-     <number>3</number>
+     <number>4</number>
     </property>
     <property name="columnCount">
      <number>1</number>
@@ -509,11 +509,12 @@
      <number>300</number>
     </attribute>
     <attribute name="verticalHeaderMinimumSectionSize">
-     <number>66</number>
+     <number>40</number>
     </attribute>
     <attribute name="verticalHeaderDefaultSectionSize">
-     <number>66</number>
+     <number>50</number>
     </attribute>
+    <row/>
     <row/>
     <row/>
     <row/>
@@ -747,7 +748,7 @@
      <string>GET ALL</string>
     </property>
    </widget>
-   <widget class="QSpinBox" name="spinBoxSlaveFrequency_2">
+   <widget class="QSpinBox" name="spinBoxSlavePer">
     <property name="geometry">
      <rect>
       <x>750</x>
@@ -760,7 +761,7 @@
      <number>999999999</number>
     </property>
    </widget>
-   <widget class="QLabel" name="labelSlaveFrequency_2">
+   <widget class="QLabel" name="labelSlaveNumberPer">
     <property name="geometry">
      <rect>
       <x>880</x>
@@ -771,6 +772,55 @@
     </property>
     <property name="text">
      <string>NUMBER OF PACKETS</string>
+    </property>
+   </widget>
+   <widget class="Line" name="line_2">
+    <property name="geometry">
+     <rect>
+      <x>1090</x>
+      <y>0</y>
+      <width>20</width>
+      <height>921</height>
+     </rect>
+    </property>
+    <property name="orientation">
+     <enum>Qt::Vertical</enum>
+    </property>
+   </widget>
+   <widget class="QLabel" name="labelMessageStatus">
+    <property name="geometry">
+     <rect>
+      <x>1150</x>
+      <y>10</y>
+      <width>271</width>
+      <height>21</height>
+     </rect>
+    </property>
+    <property name="text">
+     <string>&lt;html&gt;&lt;head/&gt;&lt;body&gt;&lt;p align=&quot;center&quot;&gt;&lt;span style=&quot; font-size:14pt; font-weight:600;&quot;&gt;MESSAGE STATUS&lt;/span&gt;&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</string>
+    </property>
+   </widget>
+   <widget class="QListWidget" name="listWidgetMessageStatus">
+    <property name="geometry">
+     <rect>
+      <x>1130</x>
+      <y>80</y>
+      <width>311</width>
+      <height>721</height>
+     </rect>
+    </property>
+   </widget>
+   <widget class="QPushButton" name="pushButtonMessageStatusClear">
+    <property name="geometry">
+     <rect>
+      <x>1210</x>
+      <y>850</y>
+      <width>151</width>
+      <height>34</height>
+     </rect>
+    </property>
+    <property name="text">
+     <string>CLEAR ALL</string>
     </property>
    </widget>
   </widget>

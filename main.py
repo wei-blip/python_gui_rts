@@ -3,12 +3,40 @@ from PyQt5 import QtWidgets
 from PyQt5.QtCore import QTimer, pyqtSignal
 from rs_0006_0_icp_pb2 import *
 from darktheme.widget_template import DarkPalette
-# from MyThreads import PerThread
+from MyThreads import ProcThreads
+from enum import IntEnum
+
+
+class TableRow(IntEnum):
+    FIRST_ROW = 0
+    SECOND_ROW = 1
+    THIRD_ROW = 2
+    FOURTH_ROW = 3
+    FIFTH_ROW = 4
+    SIXTH_ROW = 5
+
+
+class TableColumn(IntEnum):
+    FIRST_COLUMN = 0
+    SECOND_COLUMN = 1
+    THIRD_COLUMN = 2
 
 
 class DvtApp(DvtReq):
     def __init__(self):
         super().__init__()
+
+        # Dialogs begin
+        self.error_dialog = QtWidgets.QMessageBox()  # create error dialog object
+        self.error_dialog.setIcon(QtWidgets.QMessageBox.Critical)
+        self.error_dialog.setWindowTitle("Error")
+
+        self.warning_dialog = QtWidgets.QMessageBox()
+        self.warning_dialog.setIcon(QtWidgets.QMessageBox.Warning)
+        self.warning_dialog.setWindowTitle("Warning")
+        # Dialogs end
+
+        self.init_tables()
 
         # Callbacks master begin
         self.pushButtonMasterReboot.clicked.connect(self.master_reboot)
@@ -25,21 +53,15 @@ class DvtApp(DvtReq):
         self.pushButtonSlaveGetData.clicked.connect(self.slave_get_data)
         self.pushButtonSlaveGetVibro.clicked.connect(self.slave_get_vibro)
         self.pushButtonSlaveGetAll.clicked.connect(self.slave_get_all)
+        self.pushButtonMessageStatusClear.clicked.connect(self.clear_message_status)
         # Callbacks slave end
-
-        # # Buffers begin
-        # self.cw_dict = dict()
-        # self.resp_buffer = list()
-        # self.vibro_buffer = list()
-        # self.msg_list = list()
-        # self.json_list = list()
-        # # Buffers end
 
         # My signal callbacks begin
         self.tx_rx_thread.per_signal.connect(self.per_result)
         self.tx_rx_thread.socket_timeout_signal.connect(self.socket_timeout)
         self.tx_rx_thread.queue_full_signal.connect(self.queue_warning)
-        self.tx_rx_thread.queue_empty_signal.connect(self.queue_warning)
+        self.proc_thread_slave.fill_table_signal.connect(self.fill_table)
+        self.proc_thread_master.fill_table_signal.connect(self.fill_table)
         # My signal callbacks end
 
         # Timer begin
@@ -47,8 +69,6 @@ class DvtApp(DvtReq):
         self.vibro_timer.setInterval(60000)
         self.vibro_timer.timeout.connect(self.measure_vibro)
         # Timer end
-
-        self.proc_thread_slave.start()
 
     # Filling master information table begin
     def master_get_info(self):
@@ -84,6 +104,7 @@ class DvtApp(DvtReq):
         self.tx_rx_thread.per = True
         self.vibro_timer.stop()
         self.listWidgetPER.addItem("Transfer is started")
+        self.tx_rx_thread.start()
 
     def slave_get_info(self):
         self.get_dev_info(True)
@@ -103,8 +124,6 @@ class DvtApp(DvtReq):
         self.slave_get_vibro()
 
     def showEvent(self, event):
-        self.tx_rx_thread.start()
-        self.proc_thread_master.start()
         self.master_get_info()
         self.master_get_vibro()
         self.vibro_timer.start()
@@ -114,6 +133,9 @@ class DvtApp(DvtReq):
         self.vibro_timer.stop()
         self.master_get_vibro()
         self.vibro_timer.start()
+
+    def clear_message_status(self):
+        self.listWidgetMessageStatus.clear()
 
     def close_threads(self):
         for thread in self.threads:
@@ -134,6 +156,8 @@ class DvtApp(DvtReq):
             event.ignore()
 
     def per_result(self, result):
+        self.fill_table_field(self.tableWidgetSlaveRadio,
+                              TableRow.FOURTH_ROW, TableColumn.FIRST_COLUMN, (result / self.tx_rx_thread.num_packet))
         self.listWidgetPER.addItem(result)
         self.vibro_timer.start()
 
@@ -145,6 +169,125 @@ class DvtApp(DvtReq):
     def queue_warning(self, text):
         self.warning_dialog.setText(text)
         self.warning_dialog.show()
+
+    def init_tables(self):
+        # slave info table
+        for row in range(TableRow.FIRST_ROW, TableRow.FIFTH_ROW):
+            self.fill_table_field(self.tableWidgetSlaveInfo, row, TableColumn.FIRST_COLUMN, "Not received")
+        # slave data table
+        for row in range(TableRow.FIRST_ROW, TableRow.SIXTH_ROW):
+            self.fill_table_field(self.tableWidgetSlaveData, row, TableColumn.FIRST_COLUMN, "Not received")
+        # slave radio table
+        for row in range(TableRow.FIRST_ROW, TableRow.FIFTH_ROW):
+            self.fill_table_field(self.tableWidgetSlaveRadio, row, TableColumn.FIRST_COLUMN, "Not received")
+        # slave vibro table
+        for row in range(TableRow.FIRST_ROW, TableRow.FOURTH_ROW):
+            self.fill_table_field(self.tableWidgetSlaveVibro, row, TableColumn.FIRST_COLUMN, "Not received")
+
+    def fill_table(self, fill_table):
+        if fill_table.status.thread == ProcThreads.MASTER:
+            if fill_table.status.msg_type == 'devinfo':
+                devinfo_elem = fill_table.data.get("resp").get("devinfo")
+                self.fill_devinfo_field_from_master_info_table(devinfo_elem)
+            elif fill_table.status.msg_type == 'joinKey':
+                self.fill_join_key_field_from_master_info_table(fill_table.data)
+            elif fill_table.status.msg_type == 'ds18b20':
+                self.fill_ds18b20_field_from_master_info_table(fill_table.data)
+            elif fill_table.status.msg_type == 'mcuAdc':
+                self.fill_mcu_adc_field_from_master_info_table(fill_table.data)
+            elif fill_table.status.msg_type == 'vibro':
+                vrms = fill_table.data.get("resp").get("vibro").get("vrms")
+                self.fill_vibro_field_from_master_vibro_table(vrms)
+            elif fill_table.status.msg_type == 'adxl345':
+                acc_g = fill_table.data.get("resp").get("adxl345").get("accG")
+                self.fill_adxl345_field_from_master_vibro_table(acc_g)
+        elif fill_table.status.thread == ProcThreads.SLAVE:
+            if fill_table.status.msg_type == 'devinfo':
+                devinfo_elem = fill_table.data.get("resp").get("devinfo")
+                self.fill_devinfo_field_from_slave_info_table(devinfo_elem)
+            elif fill_table.status.msg_type == 'joinKey':
+                self.fill_join_key_field_from_slave_info_table(fill_table.data)
+                self.fill_radio_table(fill_table.data.get("resp"))
+            elif fill_table.status.msg_type == 'ds18b20':
+                self.fill_ds18b20_field_from_slave_data_table(fill_table.data)
+            elif fill_table.status.msg_type == 'mcuAdc':
+                self.fill_mcu_adc_field_from_slave_data_table(fill_table.data)
+            elif fill_table.status.msg_type == 'vibro':
+                vrms = fill_table.data.get("resp").get("vibro").get("vrms")
+                self.fill_vibro_field_from_slave_vibro_table(vrms)
+                self.fill_radio_table(fill_table.data.get("resp"))
+            elif fill_table.status.msg_type == 'adxl345':
+                acc_g = fill_table.data.get("resp").get("adxl345").get("accG")
+                self.fill_adxl345_field_from_slave_data_table(acc_g)
+                self.fill_radio_table(fill_table.data.get("resp"))
+
+    # This methods for filling table into window
+    # Methods for filling table fields begin
+    def fill_devinfo_field_from_master_info_table(self, json_dict):
+        table = self.tableWidgetMasterInfo
+        self.fill_table_field(table, TableRow.FIRST_ROW, TableColumn.FIRST_COLUMN, json_dict.get("devEui"))
+        self.fill_table_field(table, TableRow.SECOND_ROW, TableColumn.FIRST_COLUMN, json_dict.get("family"))
+        self.fill_table_field(table, TableRow.THIRD_ROW, TableColumn.FIRST_COLUMN, json_dict.get("version"))
+
+    def fill_devinfo_field_from_slave_info_table(self, json_dict):
+        table = self.tableWidgetSlaveInfo
+        self.fill_table_field(table, TableRow.FIRST_ROW, TableColumn.FIRST_COLUMN, json_dict.get("devEui"))
+        self.fill_table_field(table, TableRow.SECOND_ROW, TableColumn.FIRST_COLUMN, json_dict.get("family"))
+        self.fill_table_field(table, TableRow.THIRD_ROW, TableColumn.FIRST_COLUMN, json_dict.get("version"))
+
+    def fill_join_key_field_from_master_info_table(self, json_dict):
+        self.fill_table_field(self.tableWidgetMasterInfo, TableRow.FOURTH_ROW, TableColumn.FIRST_COLUMN,
+                              json_dict.get("resp").get("joinKey").get("joinKey"))
+
+    def fill_join_key_field_from_slave_info_table(self, json_dict):
+        self.fill_table_field(self.tableWidgetSlaveInfo, TableRow.FOURTH_ROW, TableColumn.FIRST_COLUMN,
+                              json_dict.get("resp").get("joinKey").get("joinKey"))
+
+    def fill_ds18b20_field_from_master_info_table(self, json_dict):
+        self.fill_table_field(self.tableWidgetMasterInfo, TableRow.FIFTH_ROW, TableColumn.FIRST_COLUMN,
+                              json_dict.get("resp").get("ds18b20").get("temp"))
+
+    def fill_ds18b20_field_from_slave_data_table(self, json_dict):
+        self.fill_table_field(self.tableWidgetSlaveData, TableRow.FOURTH_ROW, TableColumn.FIRST_COLUMN,
+                              json_dict.get("resp").get("ds18b20").get("temp"))
+
+    def fill_mcu_adc_field_from_master_info_table(self, json_dict):
+        self.fill_table_field(self.tableWidgetMasterInfo, TableRow.SIXTH_ROW, TableColumn.FIRST_COLUMN,
+                              json_dict.get("resp").get("mcuAdc").get("mcuTemperature"))
+
+    def fill_mcu_adc_field_from_slave_data_table(self, json_dict):
+        self.fill_table_field(self.tableWidgetSlaveData, TableRow.FIFTH_ROW, TableColumn.FIRST_COLUMN,
+                              json_dict.get("resp").get("mcuAdc").get("mcuTemperature"))
+
+    def fill_vibro_field_from_master_vibro_table(self, json_dict):
+        table = self.tableWidgetMasterVibro
+        self.fill_table_field(table, TableRow.FIRST_ROW, TableColumn.FIRST_COLUMN, json_dict.get("x"))
+        self.fill_table_field(table, TableRow.SECOND_ROW, TableColumn.FIRST_COLUMN, json_dict.get("y"))
+        self.fill_table_field(table, TableRow.THIRD_ROW, TableColumn.FIRST_COLUMN, json_dict.get("z"))
+
+    def fill_vibro_field_from_slave_vibro_table(self, json_dict):
+        table = self.tableWidgetSlaveVibro
+        self.fill_table_field(table, TableRow.FIRST_ROW, TableColumn.FIRST_COLUMN, json_dict.get("x"))
+        self.fill_table_field(table, TableRow.SECOND_ROW, TableColumn.FIRST_COLUMN, json_dict.get("y"))
+        self.fill_table_field(table, TableRow.THIRD_ROW, TableColumn.FIRST_COLUMN, json_dict.get("z"))
+
+    def fill_adxl345_field_from_master_vibro_table(self, json_dict):
+        table = self.tableWidgetMasterVibro
+        self.fill_table_field(table, TableRow.FIRST_ROW, TableColumn.SECOND_COLUMN, json_dict.get("x"))
+        self.fill_table_field(table, TableRow.SECOND_ROW, TableColumn.SECOND_COLUMN, json_dict.get("y"))
+        self.fill_table_field(table, TableRow.THIRD_ROW, TableColumn.SECOND_COLUMN, json_dict.get("z"))
+
+    def fill_adxl345_field_from_slave_data_table(self, json_dict):
+        table = self.tableWidgetSlaveData
+        self.fill_table_field(table, TableRow.FIRST_ROW, TableColumn.FIRST_COLUMN, json_dict.get("x"))
+        self.fill_table_field(table, TableRow.SECOND_ROW, TableColumn.FIRST_COLUMN, json_dict.get("y"))
+        self.fill_table_field(table, TableRow.THIRD_ROW, TableColumn.FIRST_COLUMN, json_dict.get("z"))
+
+    def fill_radio_table(self, json_dict):
+        table = self.tableWidgetSlaveRadio
+        self.fill_table_field(table, TableRow.FIRST_ROW, TableColumn.FIRST_COLUMN, json_dict.get("rssi"))
+        self.fill_table_field(table, TableRow.SECOND_ROW, TableColumn.FIRST_COLUMN, json_dict.get("snr"))
+        self.fill_table_field(table, TableRow.THIRD_ROW, TableColumn.FIRST_COLUMN, json_dict.get("fei"))
 
 
 def main():

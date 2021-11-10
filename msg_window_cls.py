@@ -3,7 +3,7 @@ import queue
 
 from DVT_WIN import Ui_DVW_WIN
 from PyQt5 import QtWidgets
-from MyThreads import ProcessingThread, TransmitReceiveThread
+from MyThreads import ProcessingThread, TransmitReceiveThread, ProcThreads
 from dataclasses import dataclass
 from PyQt5.QtCore import Qt
 
@@ -19,17 +19,7 @@ class DvtReq(QtWidgets.QMainWindow, Ui_DVW_WIN, QtWidgets.QMessageBox):
     def __init__(self):
         super().__init__()
         self.setupUi(self)
-        self.setFixedSize(1082, 898)
-
-        # Dialogs begin
-        self.error_dialog = QtWidgets.QMessageBox()  # create error dialog object
-        self.error_dialog.setIcon(QtWidgets.QMessageBox.Critical)
-        self.error_dialog.setWindowTitle("Error")
-
-        self.warning_dialog = QtWidgets.QMessageBox()
-        self.warning_dialog.setIcon(QtWidgets.QMessageBox.Warning)
-        self.warning_dialog.setWindowTitle("Warning")
-        # Dialogs end
+        self.setFixedSize(self.width(), self.height())
 
         # Table label settings begin
         self.tableWidgetMasterInfo.setVerticalHeaderLabels(["DevEui", "Family", "Version", "Join Key",
@@ -38,22 +28,10 @@ class DvtReq(QtWidgets.QMainWindow, Ui_DVW_WIN, QtWidgets.QMessageBox):
         self.tableWidgetMasterVibro.setHorizontalHeaderLabels(["VIBRO, vrms", "ADXL, g"])
         self.tableWidgetSlaveData.setVerticalHeaderLabels(["ACC x", "ACC y", "ACC z", "DS18B20", "MCU ADC"])
         self.tableWidgetSlaveInfo.setVerticalHeaderLabels(["DevEui", "Family", "Version", "Join Key"])
-        self.tableWidgetSlaveRadio.setVerticalHeaderLabels(["RSSI", "SNR     ", "Fei"])
+        self.tableWidgetSlaveRadio.setVerticalHeaderLabels(["RSSI", "SNR", "Fei", "PER"])
         self.tableWidgetSlaveVibro.setVerticalHeaderLabels(["VRMS x", "VRMS y", "VRMS z"])
 
-        self.tableWidgetMasterInfo.verticalHeader().setFixedWidth(64)
-        self.tableWidgetMasterVibro.verticalHeader().setFixedWidth(64)
-        self.tableWidgetSlaveData.verticalHeader().setFixedWidth(64)
-        self.tableWidgetSlaveVibro.verticalHeader().setFixedWidth(64)
-        self.tableWidgetSlaveInfo.verticalHeader().setFixedWidth(64)
-        self.tableWidgetSlaveRadio.verticalHeader().setFixedWidth(64)
-
-        self.tableWidgetMasterVibro.verticalHeader().setDefaultAlignment(Qt.AlignCenter)
-        self.tableWidgetMasterInfo.verticalHeader().setDefaultAlignment(Qt.AlignCenter)
-        self.tableWidgetSlaveRadio.verticalHeader().setDefaultAlignment(Qt.AlignCenter)
-        self.tableWidgetSlaveInfo.verticalHeader().setDefaultAlignment(Qt.AlignCenter)
-        self.tableWidgetSlaveVibro.verticalHeader().setDefaultAlignment(Qt.AlignCenter)
-        self.tableWidgetSlaveData.verticalHeader().setDefaultAlignment(Qt.AlignCenter)
+        self.correct_tables()
         # Table label settings end
 
         # CW spin box begin
@@ -78,12 +56,16 @@ class DvtReq(QtWidgets.QMainWindow, Ui_DVW_WIN, QtWidgets.QMessageBox):
         self.queue_message = queue.Queue(maxsize=15)
         self.queue_processing_master = queue.Queue(maxsize=15)
         self.queue_processing_slave = queue.Queue(maxsize=15)
-        self.proc_thread_master = ProcessingThread(self, self.queue_processing_master, True)
-        self.proc_thread_slave = ProcessingThread(self, self.queue_processing_slave, False)
+        self.proc_thread_master = ProcessingThread(self.queue_processing_master, True)
+        self.proc_thread_slave = ProcessingThread(self.queue_processing_slave, False)
         self.tx_rx_thread = TransmitReceiveThread(self.queue_message, self.queue_processing_master,
                                                   self.queue_processing_slave)
         self.threads = [self.tx_rx_thread, self.proc_thread_master, self.proc_thread_slave]
         # For threads end
+
+        # Callbacks begin
+        self.tx_rx_thread.start_proc_thread.connect(self.start_proc_thread)
+        # Callbacks end
 
     # Send devinfo message begin
     def get_dev_info(self, transit):
@@ -221,6 +203,42 @@ class DvtReq(QtWidgets.QMainWindow, Ui_DVW_WIN, QtWidgets.QMessageBox):
             self.tx_rx_thread.queue_full_signal.emit("Your message not sending because one of queue "
                                                      "if full(queue_message), please try later")
             return
+        if q_item.transit:
+            self.listWidgetMessageStatus.addItem("Message " + q_item.msg_type + " for slave device is sending")
+        else:
+            self.listWidgetMessageStatus.addItem("Message " + q_item.msg_type + " for master device is sending")
+        self.tx_rx_thread.start()
+
+    def correct_tables(self):
+        self.tableWidgetMasterInfo.verticalHeader().setFixedWidth(64)
+        self.tableWidgetMasterVibro.verticalHeader().setFixedWidth(64)
+        self.tableWidgetSlaveData.verticalHeader().setFixedWidth(64)
+        self.tableWidgetSlaveVibro.verticalHeader().setFixedWidth(64)
+        self.tableWidgetSlaveInfo.verticalHeader().setFixedWidth(64)
+        self.tableWidgetSlaveRadio.verticalHeader().setFixedWidth(64)
+
+        self.tableWidgetMasterVibro.horizontalHeader().setFixedWidth(300)
+
+        self.tableWidgetMasterVibro.verticalHeader().setDefaultAlignment(Qt.AlignCenter)
+        self.tableWidgetMasterInfo.verticalHeader().setDefaultAlignment(Qt.AlignCenter)
+        self.tableWidgetSlaveRadio.verticalHeader().setDefaultAlignment(Qt.AlignCenter)
+        self.tableWidgetSlaveInfo.verticalHeader().setDefaultAlignment(Qt.AlignCenter)
+        self.tableWidgetSlaveVibro.verticalHeader().setDefaultAlignment(Qt.AlignCenter)
+        self.tableWidgetSlaveData.verticalHeader().setDefaultAlignment(Qt.AlignCenter)
+
+    def start_proc_thread(self, status):
+        if status.thread == ProcThreads.MASTER:
+            self.listWidgetMessageStatus.addItem("Message " + status.msg_type + " for master device is received")
+            self.proc_thread_master.start()
+        elif status.thread == ProcThreads.SLAVE:
+            self.listWidgetMessageStatus.addItem("Message " + status.msg_type + " for slave device is received")
+            self.proc_thread_slave.start()
+
+    def fill_table_field(self, table, row, col, item):
+        table.setItem(
+            row, col,
+            QtWidgets.QTableWidgetItem(str(item))
+        )
 
 
 # Get time begin
